@@ -1,4 +1,4 @@
-# /deep-plan, a Claude Code Plugin
+# /deep-plan, a Claude Code plugin
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Status](https://img.shields.io/badge/status-beta-orange)
@@ -8,9 +8,9 @@
 
 ![deep-plan hero](assets/hero.jpeg)
 
-/deep-plan transforms vague feature requests into detailed, production-ready implementation plans through AI-assisted research, stakeholder interviews, and multi-LLM review.
+`/deep-plan` transforms vague feature requests into detailed, production-ready implementation plans through AI-assisted research, stakeholder interviews, and multi-LLM review.
 
-/deep-implement, it's companion plugin, is currently a WIP (planned using /deep-plan)! Coming soon.
+`/deep-implement`, it's companion plugin, is currently a WIP (planned using `/deep-plan`)! Coming soon.
 
 This plugin started as an effort to automate the most time-intensive part of my Claude Code workflow that I had previously been doing manually. It is primarily targeted at Claude Code users that don't have strict token constraints, have access to other LLMs (Gemini/OpenAI) and prefer deep planning/plan review before implementation. It's designed to speed up creating production-ready code within Claude Code without sacrificing an understanding of how it works.
 
@@ -108,7 +108,7 @@ Store sessions in Redis. Use JWT for API authentication.
 EOF
 ```
 
-Spec files can be as dense or as sparse as you like. I've used /deep-plan with a few bullet points and also used it with structured, thorough documents.
+Spec files can be as dense or as sparse as you like. I've used `/deep-plan` with a few bullet points and also used it with structured, thorough documents.
 
 **2. Run deep-plan:**
 ```
@@ -121,7 +121,7 @@ That's it. Your planning directory will contain a complete implementation plan w
 
 > **Token & Cost Note**: This workflow is token-intensive (research, multi-turn interview, external API calls). Run `/compact` before starting. External LLM reviews will incur API costs on your Gemini/OpenAI accounts.
 
-If you /compact or exit in the middle, /deep-plan can recover from the existing files.
+If you /compact or exit in the middle, `/deep-plan` can recover from the existing files.
 
 ## How It Works
 
