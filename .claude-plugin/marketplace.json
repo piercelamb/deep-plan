@@ -16,7 +16,7 @@
         "name": "piercelamb",
         "url": "https://github.com/piercelamb"
       },
-      "source": "github:piercelamb/deep-plan",
+      "source": "./",
       "category": "development",
       "homepage": "https://github.com/piercelamb/deep-plan",
       "tags": ["planning", "tdd", "architecture", "llm-review", "implementation"]
