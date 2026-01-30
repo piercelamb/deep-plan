@@ -9,9 +9,25 @@
   },
   "plugins": [
     {
+      "name": "deep-project",
+      "description": "Split vague project requirements into well-scoped units for /deep-plan",
+      "version": "0.1.0",
+      "author": {
+        "name": "piercelamb",
+        "url": "https://github.com/piercelamb"
+      },
+      "source": {
+        "type": "github",
+        "repo": "piercelamb/deep-project"
+      },
+      "category": "development",
+      "homepage": "https://github.com/piercelamb/deep-project",
+      "tags": ["planning", "decomposition", "project-management", "requirements"]
+    },
+    {
       "name": "deep-plan",
       "description": "AI-assisted deep planning with research, interview, external LLM review, and TDD approach",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "piercelamb",
         "url": "https://github.com/piercelamb"
@@ -20,6 +36,22 @@
       "category": "development",
       "homepage": "https://github.com/piercelamb/deep-plan",
       "tags": ["planning", "tdd", "architecture", "llm-review", "implementation"]
+    },
+    {
+      "name": "deep-implement",
+      "description": "Implement code from /deep-plan sections with TDD, code review, and git workflow",
+      "version": "0.1.0",
+      "author": {
+        "name": "piercelamb",
+        "url": "https://github.com/piercelamb"
+      },
+      "source": {
+        "type": "github",
+        "repo": "piercelamb/deep-implement"
+      },
+      "category": "development",
+      "homepage": "https://github.com/piercelamb/deep-implement",
+      "tags": ["implementation", "tdd", "code-review", "git", "workflow"]
     }
   ]
 }
