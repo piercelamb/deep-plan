@@ -55,30 +55,15 @@ Write `<planning_dir>/claude-plan-tdd.md` with:
    - New project: Use the recommended/chosen testing approach consistently
 5. **Don't duplicate implementation details** - Just specify what to test, not how to implement
 
-### Example Structure
+**CRITICAL - Stubs means stubs.** Test "stubs" are prose descriptions or minimal signatures explaining what to test - NOT full test implementations. Example:
 
-```markdown
-# TDD Plan for [Feature Name]
-
-## Phase 1: [Same heading as claude-plan.md]
-
-### Tests to Write First
-
-1. `test_[description].py` - Tests for [component]
-   - Test case: [scenario]
-   - Test case: [scenario]
-
-2. `test_[description].py` - Tests for [component]
-   - Test case: [scenario]
-
-### Implementation Order
-1. Write tests above (red)
-2. Implement [component] (green)
-3. Refactor if needed
-
-## Phase 2: [Same heading as claude-plan.md]
-...
+```python
+# Test: parse_company_page extracts name from JSON-LD
+# Test: parse_company_page falls back to HTML when JSON-LD missing
+# Test: parse_company_page logs warning when <50% fields populated
 ```
+
+NOT full pytest functions with assertions, fixtures, and mocking. The implementer writes the actual test code.
 
 ## Usage in Step 18
 

@@ -2,7 +2,7 @@
 
 # /deep-plan, a Claude Code plugin
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![Status](https://img.shields.io/badge/status-beta-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)
@@ -12,7 +12,9 @@
 
 `/deep-plan` transforms vague feature requests into detailed, production-ready implementation plans through AI-assisted research, stakeholder interviews, and multi-LLM review.
 
-`/deep-implement`, it's companion plugin, is currently a WIP (planned using `/deep-plan`)! Coming soon.
+[`/deep-implement`](https://github.com/piercelamb/deep-implement), its companion plugin, takes these section files and implements them with TDD methodology, integrated code review, and atomic commits.
+
+For large projects with broad, vague requirements, use [`/deep-project`](https://github.com/piercelamb/deep-project) first to decompose into focused planning units before running `/deep-plan` on each.
 
 This plugin started as an effort to automate the most time-intensive part of my Claude Code workflow that I had previously been doing manually. It is primarily targeted at Claude Code users that don't have strict token constraints, have access to other LLMs (Gemini/OpenAI) and prefer deep planning/plan review before implementation. It's designed to speed up creating production-ready code within Claude Code without sacrificing an understanding of how it works.
 
@@ -27,6 +29,7 @@ This plugin started as an effort to automate the most time-intensive part of my 
 ## Table of Contents
 
 - [Overview](#overview)
+- [The Deep Trilogy](#the-deep-trilogy)
 - [Why deep-plan?](#why-deep-plan)
 - [When to Use](#when-to-use)
 - [Quick Start](#quick-start)
@@ -44,6 +47,7 @@ This plugin started as an effort to automate the most time-intensive part of my 
 - [Testing](#testing)
 - [Project Structure](#project-structure)
 - [Contributing](#contributing)
+- [Changelog](#changelog)
 
 ## Overview
 
@@ -61,6 +65,77 @@ The plugin guides you through:
 - **Section Phase**: Split into parallelizable, self-contained implementation units
 
 By the end, you have a complete planning directory with specs, research, reviews, and small, isolated implementation sections that any engineer (or Claude) can pick up cold.
+
+## The Deep Trilogy
+
+This plugin is part of a three-plugin pipeline for turning ideas into production code:
+
+```
+/deep-project (decompose) → /deep-plan (plan) → /deep-implement (build)
+```
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│                        THE DEEP TRILOGY                           │
+│                From Vague Idea to Production Code                 │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│         "I want to build a SaaS platform"                         │
+│                        │                                          │
+│                        ▼                                          │
+│      ┌─────────────────────────────────────┐                      │
+│      │            /deep-project            │                      │
+│      └─────────────────────────────────────┘                      │
+│           │            │            │                             │
+│           ▼            ▼            ▼                             │
+│      ┌─────────┐  ┌─────────┐  ┌─────────┐                        │
+│      │ 01-auth │  │ 02-bill │  │   ...   │                        │
+│      │ spec.md │  │ spec.md │  │         │                        │
+│      └─────────┘  └─────────┘  └─────────┘                        │
+│           │            │            │                             │
+│           ▼            ▼            ▼                             │
+│      ┌─────────┐  ┌─────────┐  ┌─────────┐                        │
+│      │ /deep-  │  │ /deep-  │  │   ...   │  ◀── YOU ARE HERE      │
+│      │  plan   │  │  plan   │  │         │                        │
+│      └─────────┘  └─────────┘  └─────────┘                        │
+│         │   │       │ │ │           │                             │
+│         ▼   ▼       ▼ ▼ ▼           ▼                             │
+│      ┌────┐┌────┐┌────┐┌────┐┌────┐┌─────────┐                    │
+│      │ 01 ││ 02 ││ 01 ││ 02 ││ 03 ││   ...   │                    │
+│      └────┘└────┘└────┘└────┘└────┘└─────────┘                    │
+│        │    │     │     │    │          │                         │
+│        └─┬──┘     └──┬──┴────┘          │                         │
+│          │           │                  │                         │
+│          ▼           ▼                  ▼                         │
+│      ┌─────────┐┌─────────┐        ┌─────────┐                    │
+│      │ /deep-  ││ /deep-  │        │   ...   │                    │
+│      │implement││implement│        │         │                    │
+│      └─────────┘└─────────┘        └─────────┘                    │
+│           │          │                  │                         │
+│           ▼          ▼                  ▼                         │
+│      ┌─────────┐┌─────────┐        ┌─────────┐                    │
+│      │  auth   ││ billing │        │   ...   │                    │
+│      │  code   ││  code   │        │         │                    │
+│      └─────────┘└─────────┘        └─────────┘                    │
+│           │          │                  │                         │
+│           └──────────┴──────────────────┘                         │
+│                          │                                        │
+│                          ▼                                        │
+│                 Production Codebase                               │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+| Plugin | Purpose | Input | Output |
+|--------|---------|-------|--------|
+| [`/deep-project`](https://github.com/piercelamb/deep-project) | Decompose | Vague requirements | Focused spec files |
+| [`/deep-plan`](https://github.com/piercelamb/deep-plan) | Plan | Spec file | Section files with TDD |
+| [`/deep-implement`](https://github.com/piercelamb/deep-implement) | Build | Section files | Production code |
+
+**Where to start?**
+- **Vague multi-component project?** Start with [`/deep-project`](https://github.com/piercelamb/deep-project)
+- **Single focused feature?** Start here with `/deep-plan`
+- **Already have section files?** Skip to [`/deep-implement`](https://github.com/piercelamb/deep-implement)
 
 ## Why deep-plan?
 
@@ -458,6 +533,10 @@ Contributions welcome! Please:
 
 Pierce Lamb
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Version
 
-0.1.0
+0.2.0

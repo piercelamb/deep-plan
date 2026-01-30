@@ -35,6 +35,25 @@ def main():
 
     upcoming_operation = args.upcoming_operation
 
+    # Build the prompt with trade-off explanations
+    prompt_message = (
+        f"Context check before: {upcoming_operation}\n\n"
+        "Note: Compaction (manual or auto) may cause workflow instruction loss. "
+        "If Claude gets confused after compacting, /clear + re-run /deep-plan is the cleanest recovery - "
+        "your progress is preserved in planning files."
+    )
+
+    prompt_options = [
+        {
+            "label": "Continue",
+            "description": "Proceed with current context (auto-compact triggers at ~95% if needed)"
+        },
+        {
+            "label": "/clear + re-run",
+            "description": "Cleanest recovery if context is critical - fresh window with file-based resume"
+        },
+    ]
+
     try:
         config = load_session_config(args.planning_dir)
     except (ConfigError, json.JSONDecodeError) as e:
@@ -44,14 +63,8 @@ def main():
             "reason": f"Config error ({e}), defaulting to prompt",
             "check_enabled": True,
             "prompt": {
-                "message": (
-                    f"Next step is: {upcoming_operation}\n\n"
-                    "If your context is high, now is a good time to /compact."
-                ),
-                "options": [
-                    {"label": "Continue", "description": "Proceed with the operation"},
-                    {"label": "Compact first", "description": "Run /compact, then say 'continue' to resume"}
-                ]
+                "message": prompt_message,
+                "options": prompt_options
             }
         }))
         return 0
@@ -74,14 +87,8 @@ def main():
         "reason": "Context prompts enabled",
         "check_enabled": True,
         "prompt": {
-            "message": (
-                f"Next step is: {upcoming_operation}\n\n"
-                "If your context is high, now is a good time to /compact."
-            ),
-            "options": [
-                {"label": "Continue", "description": "Proceed with the operation"},
-                {"label": "Compact first", "description": "Run /compact, then say 'continue' to resume"}
-            ]
+            "message": prompt_message,
+            "options": prompt_options
         }
     }))
     return 0

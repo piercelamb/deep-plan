@@ -14,6 +14,54 @@ Create `<planning_dir>/sections/index.md` to define implementation sections.
 └── index.md
 ```
 
+## Required Blocks
+
+index.md MUST contain two blocks at the top:
+
+1. **PROJECT_CONFIG** - Project-level settings for implementation
+2. **SECTION_MANIFEST** - List of section files to implement
+
+---
+
+## PROJECT_CONFIG Block
+
+**index.md MUST start with a PROJECT_CONFIG block:**
+
+```markdown
+<!-- PROJECT_CONFIG
+runtime: python-uv
+test_command: uv run pytest
+END_PROJECT_CONFIG -->
+```
+
+### PROJECT_CONFIG Fields
+
+| Field | Required | Description | Examples |
+|-------|----------|-------------|----------|
+| `runtime` | Yes | Language and tooling | `python-uv`, `python-pip`, `typescript-npm`, `typescript-pnpm`, `rust-cargo`, `go` |
+| `test_command` | Yes | Command to run tests | `uv run pytest`, `npm test`, `cargo test`, `go test ./...` |
+
+### PROJECT_CONFIG Rules
+
+- Must be at the TOP of index.md (before SECTION_MANIFEST)
+- One field per line, format: `key: value`
+- Keys are lowercase with underscores
+- Values can contain spaces (e.g., `uv run pytest -v`)
+- This block is parsed by setup scripts
+
+### Common Runtime Values
+
+| Runtime | Test Command |
+|---------|--------------|
+| `python-uv` | `uv run pytest` |
+| `python-pip` | `pytest` or `python -m pytest` |
+| `typescript-npm` | `npm test` |
+| `typescript-pnpm` | `pnpm test` |
+| `rust-cargo` | `cargo test` |
+| `go` | `go test ./...` |
+
+---
+
 ## SECTION_MANIFEST Block
 
 **index.md MUST start with a SECTION_MANIFEST block:**
@@ -98,6 +146,11 @@ Configuration loading and validation.
 ## Example index.md
 
 ```markdown
+<!-- PROJECT_CONFIG
+runtime: python-uv
+test_command: uv run pytest
+END_PROJECT_CONFIG -->
+
 <!-- SECTION_MANIFEST
 section-01-foundation
 section-02-core-libs

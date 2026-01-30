@@ -13,6 +13,10 @@ from pathlib import Path
 # Session config file name (stored in planning directory)
 SESSION_CONFIG_FILENAME = "deep_plan_config.json"
 
+# Fully qualified subagent type for section-writer
+# Used by SubagentStart/SubagentStop hooks to identify section-writer agents
+SECTION_WRITER_AGENT_TYPE = "deep-plan:section-writer"
+
 # Required keys in session config
 SESSION_REQUIRED_KEYS = ["plugin_root", "planning_dir", "initial_file"]
 

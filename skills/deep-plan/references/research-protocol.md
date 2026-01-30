@@ -25,7 +25,7 @@ This document defines the research decision and execution flow for steps 6-7 of 
 
 ### 6.1 Read and Analyze the Spec File
 
-Read the spec file (from `initial_file` in TODO context items) and extract potential research topics by identifying:
+Read the spec file (from `initial_file` in task context items) and extract potential research topics by identifying:
 
 - **Technologies mentioned** (React, Python, PostgreSQL, Redis, etc.)
 - **Feature types** (authentication, file upload, real-time sync, caching, etc.)

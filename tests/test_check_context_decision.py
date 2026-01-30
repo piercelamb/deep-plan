@@ -115,7 +115,7 @@ class TestCheckContextDecision:
         # Check specific options
         labels = [opt["label"] for opt in options]
         assert "Continue" in labels
-        assert "Compact first" in labels
+        assert "/clear + re-run" in labels
 
     def test_check_disabled_skips(self, run_script, planning_dir_with_config):
         """Should skip when check_enabled is false in config."""
