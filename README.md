@@ -19,7 +19,7 @@
 
 For large projects with broad, vague requirements, use [`/deep-project`](https://github.com/piercelamb/deep-project) first to decompose into focused planning units before running `/deep-plan` on each.
 
-This plugin started as an effort to automate the most time-intensive part of my Claude Code workflow that I had previously been doing manually. It is primarily targeted at Claude Code users that don't have strict token constraints, have access to other LLMs (Gemini/OpenAI) and prefer deep planning/plan review before implementation. It's designed to speed up creating production-ready code within Claude Code without sacrificing an understanding of how it works.
+This plugin started as an effort to automate the most time-intensive part of my Claude Code workflow that I had previously been doing manually. It is primarily targeted at Claude Code users that don't have strict token constraints and prefer deep planning/plan review before implementation. It's designed to speed up creating production-ready code within Claude Code without sacrificing an understanding of how it works.
 
 ## TL;DR
 ```
@@ -63,9 +63,9 @@ Research → Interview → External LLM Review → TDD Plan → Section Splittin
 The plugin guides you through:
 - **Research Phase**: Analyze existing codebases and research the web for current best practices
 - **Interview Phase**: Structured Q&A to surface hidden requirements and edge cases
-- **External Review**: Independent feedback from Gemini and OpenAI on your plan
+- **External Review**: Independent feedback from Gemini, OpenAI, or an Opus subagent on your plan
 - **TDD Phase**: Define test stubs before implementation
-- **Section Phase**: Split into parallelizable, self-contained implementation units
+- **Section Phase**: Split into parallelizable, self-contained implementation units (written in parallel via subagents)
 
 By the end, you have a complete planning directory with specs, research, reviews, and small, isolated implementation sections that any engineer (or Claude) can pick up cold.
 
@@ -202,7 +202,7 @@ Spec files can be as dense or as sparse as you like. I've used `/deep-plan` with
 
 That's it. Your planning directory will contain a complete implementation plan with TDD stubs and parallelizable sections.
 
-> **Token & Cost Note**: This workflow is token-intensive (research, multi-turn interview, external API calls). Run `/compact` before starting. External LLM reviews will incur API costs on your Gemini/OpenAI accounts.
+> **Token & Cost Note**: This workflow is token-intensive (research, multi-turn interview, review). Run `/compact` before starting. If using external LLM reviews (Gemini/OpenAI), those will incur API costs on your accounts.
 
 If you /compact or exit in the middle, `/deep-plan` can recover from the existing files.
 
@@ -243,9 +243,10 @@ If you /compact or exit in the middle, `/deep-plan` can recover from the existin
 - [Claude Code](https://claude.ai/code) installed
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
 - Python 3.11+
-- At least one external LLM API key:
+- (Optional) External LLM API key for review:
   - **Gemini**: `GEMINI_API_KEY` ([get one](https://aistudio.google.com/apikey)) or Google Cloud ADC credentials
   - **OpenAI**: `OPENAI_API_KEY` ([get one](https://platform.openai.com/api-keys))
+  - If no external keys configured, review can be performed via Opus subagent
 
 ### Install via Marketplace (Recommended)
 
@@ -288,16 +289,18 @@ git clone https://github.com/piercelamb/deep-plan.git /path/to/deep-plan
 claude --plugin-dir /path/to/deep-plan
 ```
 
-### Configure API Keys
+### Configure API Keys (Optional)
 
-Set at least one API key for external LLM review. See [Environment Variables](#environment-variables) for all options.
+For external LLM review via Gemini or OpenAI, set API keys. See [Environment Variables](#environment-variables) for all options.
 
 ```bash
 export OPENAI_API_KEY="your-key"    # For OpenAI/ChatGPT
 export GEMINI_API_KEY="your-key"    # For Gemini
 ```
 
-The plugin also supports Application Default Credentials (ADC) relative to Gemini. If you use ADC, you'll need to set `GOOGLE_CLOUD_LOCATION` or set your project's location in the plugins `config.json` file.
+The plugin also supports Application Default Credentials (ADC) for Gemini. If you use ADC, you'll need to set `GOOGLE_CLOUD_LOCATION` or set your project's location in the plugin's `config.json` file.
+
+If no external LLM keys are configured, the plugin can perform review via an Opus subagent instead.
 
 The plugin validates your configuration when `/deep-plan` first runs.  
 
@@ -331,9 +334,9 @@ The plugin runs a multi-phase workflow:
 | **Research** | Codebase exploration, web research (optional, based on your choices) |
 | **Interview** | Structured Q&A to clarify requirements |
 | **Planning** | Synthesize spec, generate implementation plan |
-| **Review** | External LLM review, integrate feedback, user review |
+| **Review** | External LLM review (Gemini/OpenAI or Opus subagent), integrate feedback, user review |
 | **TDD** | Generate test stubs mirroring plan structure |
-| **Sections** | Split into implementation sections, generate files |
+| **Sections** | Split into implementation sections, generate files in parallel via subagents |
 
 ## Output Files
 
@@ -350,8 +353,9 @@ planning/
 ├── claude-integration-notes.md  # Feedback integration decisions
 ├── claude-plan-tdd.md           # Test stubs
 ├── reviews/
-│   ├── gemini-review.md         # Gemini feedback
-│   └── openai-review.md         # OpenAI feedback
+│   ├── gemini-review.md         # Gemini feedback (if using Gemini)
+│   ├── openai-review.md         # OpenAI feedback (if using OpenAI)
+│   └── opus-review.md           # Opus subagent feedback (if no external LLMs)
 └── sections/
     ├── index.md                 # Section manifest
     ├── section-01-*.md          # Implementation unit 1
@@ -419,7 +423,7 @@ For Vertex AI, also set (or set in `config.json`):
 - Claude Code
 - Python >= 3.11
 - uv package manager
-- At least one external LLM API key (Gemini or OpenAI)
+- (Optional) External LLM API key (Gemini or OpenAI) for external review
 
 ### Python Dependencies
 
@@ -460,9 +464,10 @@ Your API keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`) are:
 
 **Issue**: validate-env.sh reports no Gemini or OpenAI auth
 
-**Solution**:
+**Solution** (choose one):
 - Set `GEMINI_API_KEY` or `OPENAI_API_KEY` environment variable
-- Or configure Google Cloud ADC: `gcloud auth application-default login`
+- Configure Google Cloud ADC: `gcloud auth application-default login`
+- Continue without external keys—the plugin will offer Opus subagent review instead
 
 ### "Spec file not found"
 
