@@ -4,9 +4,21 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
+
+# Import wait_for_stable_file directly for unit testing
+# The script uses hyphens in its filename, so we need importlib
+import importlib.util
+
+_hook_path = Path(__file__).parent.parent / "scripts" / "hooks" / "write-section-on-stop.py"
+_spec = importlib.util.spec_from_file_location("write_section_on_stop", _hook_path)
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+wait_for_stable_file = _mod.wait_for_stable_file
 
 
 def get_test_env(tmp_path: Path) -> dict:
@@ -406,3 +418,152 @@ class TestWriteSectionOnStop:
         content = output_file.read_text()
         assert "Final Content" in content
         assert "First response" not in content
+
+
+class TestWaitForStableFile:
+    """Tests for wait_for_stable_file() — the race condition fix."""
+
+    @pytest.fixture
+    def hook_script(self):
+        """Return path to the hook script."""
+        return Path(__file__).parent.parent / "scripts" / "hooks" / "write-section-on-stop.py"
+
+    def test_static_file_returns_quickly(self, tmp_path):
+        """A file that already exists and isn't changing should return fast."""
+        f = tmp_path / "stable.jsonl"
+        f.write_text("line1\nline2\n")
+
+        start = time.time()
+        wait_for_stable_file(str(f), stability_ms=100, poll_ms=25)
+        elapsed = time.time() - start
+
+        # Should take ~100-150ms (stability window + 1-2 polls), not 5s timeout
+        assert elapsed < 0.5
+
+    def test_growing_file_waits_until_stable(self, tmp_path):
+        """Should wait for file to stop growing before returning."""
+        f = tmp_path / "growing.jsonl"
+        f.write_text("initial\n")
+
+        writes_done = threading.Event()
+
+        def append_lines():
+            """Append lines with small delays to simulate ongoing writes."""
+            for i in range(5):
+                time.sleep(0.03)  # 30ms between writes
+                with open(f, "a") as fh:
+                    fh.write(f"line {i}\n")
+            writes_done.set()
+
+        writer = threading.Thread(target=append_lines)
+        writer.start()
+
+        wait_for_stable_file(str(f), stability_ms=150, poll_ms=25)
+
+        # All writes should be done before we return
+        assert writes_done.is_set()
+        content = f.read_text()
+        assert "line 4" in content  # Last line was written
+
+        writer.join()
+
+    def test_timeout_falls_through(self, tmp_path):
+        """Should return after timeout even if file keeps changing."""
+        f = tmp_path / "forever.jsonl"
+        f.write_text("start\n")
+
+        stop_writing = threading.Event()
+
+        def keep_writing():
+            i = 0
+            while not stop_writing.is_set():
+                time.sleep(0.02)
+                with open(f, "a") as fh:
+                    fh.write(f"line {i}\n")
+                i += 1
+
+        writer = threading.Thread(target=keep_writing)
+        writer.start()
+
+        start = time.time()
+        wait_for_stable_file(str(f), stability_ms=100, timeout_s=0.5, poll_ms=25)
+        elapsed = time.time() - start
+
+        stop_writing.set()
+        writer.join()
+
+        # Should have timed out around 0.5s, not waited for stability
+        assert elapsed >= 0.4
+        assert elapsed < 1.0
+
+    def test_nonexistent_file_times_out(self, tmp_path):
+        """Should timeout gracefully if file doesn't exist."""
+        start = time.time()
+        wait_for_stable_file(str(tmp_path / "nope.jsonl"), stability_ms=50, timeout_s=0.3, poll_ms=25)
+        elapsed = time.time() - start
+
+        assert elapsed >= 0.25
+        assert elapsed < 0.6
+
+    def test_race_condition_simulation(self, hook_script, tmp_path):
+        """Simulate the actual race: transcript incomplete when hook starts, completed during wait.
+
+        This reproduces the exact bug from FINDINGS.md where the hook reads the
+        transcript before the final assistant message is written.
+        """
+        sections_dir = tmp_path / "sections"
+        sections_dir.mkdir()
+        prompts_dir = sections_dir / ".prompts"
+        prompts_dir.mkdir()
+        prompt_file = prompts_dir / "section-01-race-prompt.md"
+        prompt_file.write_text("# Prompt")
+
+        # Build a transcript that simulates the race:
+        # - Lines 1-3: user msg, assistant tool_use, user tool_result
+        # - Line 4: small intermediate assistant text (the WRONG content)
+        # - Line 5: the REAL section content (large assistant text)
+        # - Line 6: final progress event
+        incomplete_lines = [
+            json.dumps({"message": {"role": "user", "content": f"Read {prompt_file} and execute"}}),
+            json.dumps({"message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Read", "input": {}}]}}),
+            json.dumps({"message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "file contents"}]}}),
+            json.dumps({"message": {"role": "assistant", "content": "Let me try a different approach..."}}),
+        ]
+        final_lines = [
+            json.dumps({"message": {"role": "assistant", "content": "# Race Test Section\n\nThis is the REAL section content with lots of detail."}}),
+            json.dumps({"progress": {"type": "final"}}),
+        ]
+
+        transcript_path = tmp_path / "transcript.jsonl"
+        # Write incomplete transcript (missing last 2 lines — the exact race scenario)
+        transcript_path.write_text("\n".join(incomplete_lines))
+
+        def append_final_lines():
+            """Simulate Claude Code flushing the final entries after ~100ms."""
+            time.sleep(0.1)
+            with open(transcript_path, "a") as fh:
+                fh.write("\n" + "\n".join(final_lines))
+
+        writer = threading.Thread(target=append_final_lines)
+        writer.start()
+
+        payload = {"agent_transcript_path": str(transcript_path)}
+
+        result = subprocess.run(
+            ["uv", "run", str(hook_script)],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env=get_test_env(tmp_path),
+        )
+
+        writer.join()
+
+        assert result.returncode == 0
+
+        output_file = sections_dir / "section-01-race.md"
+        assert output_file.exists()
+        content = output_file.read_text()
+        # Must contain the REAL section content, not the intermediate message
+        assert "REAL section content" in content
+        assert "different approach" not in content

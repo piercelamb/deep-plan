@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -58,6 +59,42 @@ except ImportError as e:
     raise
 
 
+def wait_for_stable_file(path: str, stability_ms: int = 200, timeout_s: float = 5.0, poll_ms: int = 50) -> None:
+    """Wait for a file to stop being written to.
+
+    Polls file size until it hasn't changed for stability_ms.
+    The race window is 15-44ms, so 200ms stability threshold
+    gives 4-13x safety margin.
+
+    Args:
+        path: File path to monitor.
+        stability_ms: File must be unchanged for this long (ms).
+        timeout_s: Give up after this many seconds.
+        poll_ms: Time between size checks (ms).
+    """
+    deadline = time.time() + timeout_s
+    last_size = -1
+    stable_since = time.time()
+
+    while time.time() < deadline:
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            time.sleep(poll_ms / 1000)
+            continue
+
+        if size != last_size:
+            last_size = size
+            stable_since = time.time()
+        elif (time.time() - stable_since) >= stability_ms / 1000:
+            debug_log(f"File stable at {size} bytes after {(time.time() - (stable_since - stability_ms / 1000)):.0f}ms")
+            return
+
+        time.sleep(poll_ms / 1000)
+
+    debug_log(f"Timeout waiting for stable file (last_size={last_size})")
+
+
 def main() -> int:
     """Process Stop hook payload and write section file.
 
@@ -85,6 +122,9 @@ def main() -> int:
     if not transcript_path:
         debug_log("No agent_transcript_path, exiting")
         return 0
+
+    # 2.5 Wait for transcript to finish being written
+    wait_for_stable_file(transcript_path)
 
     # 3. Extract prompt file path from first user message
     try:

@@ -2,7 +2,7 @@
 
 # /deep-plan, a Claude Code plugin
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-0.3.1-blue)
 ![Status](https://img.shields.io/badge/status-beta-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-Plugin-purple)
@@ -547,4 +547,4 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Version
 
-0.3.0
+0.3.1
