@@ -33,7 +33,8 @@ def test_gemini_api_key(model: str) -> dict:
     try:
         from google import genai
 
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        gemini_api_key = os.environ.get("DEEPPLAN_GEMINI_API_KEY") or os.environ["GEMINI_API_KEY"]
+        client = genai.Client(api_key=gemini_api_key)
         # Make a minimal generation call to verify model is actually accessible
         # models.get() only checks catalog, not actual access permissions
         response = client.models.generate_content(
@@ -123,7 +124,24 @@ def test_openai(model: str) -> dict:
     try:
         from openai import OpenAI, NotFoundError
 
-        client = OpenAI()
+        # Support DEEPPLAN_ overrides for OpenAI-compatible APIs
+        api_key = os.environ.get("DEEPPLAN_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return {
+                "success": False,
+                "model": model,
+                "base_url": None,
+                "error": "OPENAI_API_KEY not set"
+            }
+
+        # Support custom base URL for OpenAI-compatible APIs
+        base_url = os.environ.get("DEEPPLAN_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+
+        if base_url:
+            client = OpenAI(api_key=api_key, base_url=base_url)
+        else:
+            client = OpenAI(api_key=api_key)
+
         # Make a minimal chat completion to verify model is actually accessible
         # Use max_completion_tokens (not max_tokens) for GPT-5.x and o-series models
         response = client.chat.completions.create(
@@ -134,17 +152,24 @@ def test_openai(model: str) -> dict:
         return {
             "success": True,
             "model": model,
+            "base_url": base_url,
             "test": "generation"
         }
     except NotFoundError as e:
         return {
             "success": False,
             "model": model,
+            "base_url": base_url,
             "error": f"Model '{model}' not found or not accessible for generation",
             "details": str(e)
         }
     except Exception as e:
-        return {"success": False, "model": model, "error": str(e)}
+        return {
+            "success": False,
+            "model": model,
+            "base_url": base_url,
+            "error": str(e)
+        }
 
 
 def main():
