@@ -36,12 +36,56 @@ SECURITY:
 ```
 
 **Find and run validate-env.sh:**
+
+First, define the path resolution helper function:
 ```bash
-find "$(pwd)" -path "*/deep_plan/scripts/checks/validate-env.sh" -type f 2>/dev/null | head -1
+# Resolve script path with CLAUDE_PLUGIN_ROOT priority
+resolve_script_path() {
+  local script_rel_path="$1"  # e.g., "scripts/checks/validate-env.sh"
+  local script_path=""
+
+  # Strategy 1: Use CLAUDE_PLUGIN_ROOT (most reliable)
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    local candidate="$CLAUDE_PLUGIN_ROOT/$script_rel_path"
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+
+  # Strategy 2: Search from pwd (development fallback)
+  local pwd_result="$(find "$(pwd)" -path "*/$script_rel_path" -type f 2>/dev/null | head -n1)"
+  if [ -n "$pwd_result" ]; then
+    # Warn if CLAUDE_PLUGIN_ROOT was set but didn't work
+    if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+      echo "⚠️  Using workspace copy: $pwd_result (CLAUDE_PLUGIN_ROOT path not found)" >&2
+    fi
+    echo "$pwd_result"
+    return 0
+  fi
+
+  # Strategy 3: Search from CLAUDE_PLUGIN_ROOT parent (edge case)
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    local plugin_root_result="$(find "$CLAUDE_PLUGIN_ROOT" -path "*/$script_rel_path" -type f 2>/dev/null | head -n1)"
+    if [ -n "$plugin_root_result" ]; then
+      echo "$plugin_root_result"
+      return 0
+    fi
+  fi
+
+  # Not found
+  echo "ERROR: $script_rel_path not found" >&2
+  echo "  CLAUDE_PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT:-<not set>}" >&2
+  echo "  Current directory: $(pwd)" >&2
+  echo "  This usually means the plugin isn't properly installed or loaded." >&2
+  return 1
+}
 ```
 
+Now use it to find and run validate-env.sh:
 ```bash
-bash <script_path>
+script_path="$(resolve_script_path "scripts/checks/validate-env.sh")" || exit 1
+bash "$script_path"
 ```
 
 **Parse the JSON output:**
