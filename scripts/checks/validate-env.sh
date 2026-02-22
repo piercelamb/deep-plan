@@ -9,10 +9,10 @@
 # Checks:
 # 1. uv is installed (REQUIRED - all Python execution uses uv)
 # 2. Gemini auth:
-#    - GEMINI_API_KEY (AI Studio API) OR
+#    - DEEPPLAN_GEMINI_API_KEY (preferred) or GEMINI_API_KEY (AI Studio API) OR
 #    - ADC + GCP project (Vertex AI API)
-#      Project source: config.json → gcloud config → GOOGLE_CLOUD_PROJECT env
-# 3. OPENAI_API_KEY is set (for ChatGPT)
+#      Project source: config.json → gcloud config → DEEPPLAN_GOOGLE_CLOUD_PROJECT/GOOGLE_CLOUD_PROJECT env
+# 3. DEEPPLAN_OPENAI_API_KEY (preferred) or OPENAI_API_KEY is set (for ChatGPT)
 # 4. Test actual client construction (calls test_llm_clients.py)
 #
 # Exit codes:
@@ -70,6 +70,34 @@ if [ -f "$config_file" ]; then
     openai_model=$(jq -r '.models.chatgpt // empty' "$config_file" 2>/dev/null || echo "")
 fi
 
+# Resolve effective env vars (DEEPPLAN_ overrides generic vars)
+effective_gemini_api_key="${DEEPPLAN_GEMINI_API_KEY:-${GEMINI_API_KEY:-}}"
+effective_openai_api_key="${DEEPPLAN_OPENAI_API_KEY:-${OPENAI_API_KEY:-}}"
+effective_openai_base_url="${DEEPPLAN_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-}}"
+effective_openai_model="${DEEPPLAN_OPENAI_MODEL:-${OPENAI_MODEL:-$openai_model}}"
+effective_google_cloud_project="${DEEPPLAN_GOOGLE_CLOUD_PROJECT:-${GOOGLE_CLOUD_PROJECT:-}}"
+effective_google_cloud_location="${DEEPPLAN_GOOGLE_CLOUD_LOCATION:-${GOOGLE_CLOUD_LOCATION:-}}"
+effective_google_application_credentials="${DEEPPLAN_GOOGLE_APPLICATION_CREDENTIALS:-${GOOGLE_APPLICATION_CREDENTIALS:-}}"
+
+# Determine whether provider intent was explicitly scoped via DEEPPLAN_* variables.
+# If at least one provider is explicitly scoped, validate only those providers.
+explicit_openai_scope="false"
+if [ -n "${DEEPPLAN_OPENAI_API_KEY:-}" ] || [ -n "${DEEPPLAN_OPENAI_MODEL:-}" ] || [ -n "${DEEPPLAN_OPENAI_BASE_URL:-}" ]; then
+    explicit_openai_scope="true"
+fi
+
+explicit_gemini_scope="false"
+if [ -n "${DEEPPLAN_GEMINI_API_KEY:-}" ] || [ -n "${DEEPPLAN_GOOGLE_CLOUD_PROJECT:-}" ] || [ -n "${DEEPPLAN_GOOGLE_CLOUD_LOCATION:-}" ] || [ -n "${DEEPPLAN_GOOGLE_APPLICATION_CREDENTIALS:-}" ]; then
+    explicit_gemini_scope="true"
+fi
+
+validate_gemini="true"
+validate_openai="true"
+if [ "$explicit_gemini_scope" = "true" ] || [ "$explicit_openai_scope" = "true" ]; then
+    validate_gemini="$explicit_gemini_scope"
+    validate_openai="$explicit_openai_scope"
+fi
+
 # Get GCP project from gcloud config (if gcloud is available)
 gcloud_gcp_project=""
 if command -v gcloud &> /dev/null; then
@@ -78,63 +106,73 @@ fi
 
 # Resolve GCP project: config.json → gcloud config → env var
 # Resolve GCP location: config.json → env var (no default - must be explicitly set for ADC)
-gcp_project="${config_gcp_project:-${gcloud_gcp_project:-${GOOGLE_CLOUD_PROJECT:-}}}"
-gcp_location="${config_gcp_location:-${GOOGLE_CLOUD_LOCATION:-}}"
+gcp_project="${config_gcp_project:-${gcloud_gcp_project:-${effective_google_cloud_project:-}}}"
+gcp_location="${config_gcp_location:-${effective_google_cloud_location:-}}"
 
 # Check 2: Gemini auth
 # Priority: API key (AI Studio) > ADC + Project (Vertex AI)
 # SECURITY: We only check if API key EXISTS ([ -n ] test), never echo its value
-if [ -n "${GEMINI_API_KEY:-}" ]; then
-    gemini_auth='"api_key"'
-else
-    # Check for ADC (either explicit path or default location)
-    adc_path="${HOME}/.config/gcloud/application_default_credentials.json"
-    has_adc="false"
-    if [ -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" ] && [ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]; then
-        has_adc="true"
-    elif [ -f "$adc_path" ]; then
-        has_adc="true"
-    fi
+if [ "$validate_gemini" = "true" ]; then
+    if [ -n "$effective_gemini_api_key" ]; then
+        gemini_auth='"api_key"'
+    else
+        # Check for ADC (either explicit path or default location)
+        adc_path="${HOME}/.config/gcloud/application_default_credentials.json"
+        has_adc="false"
+        if [ -n "$effective_google_application_credentials" ] && [ -f "$effective_google_application_credentials" ]; then
+            has_adc="true"
+        elif [ -f "$adc_path" ]; then
+            has_adc="true"
+        fi
 
-    if [ "$has_adc" = "true" ]; then
-        # ADC exists - check if GCP project AND location are set (both required for Vertex AI)
-        if [ -z "$gcp_project" ]; then
-            gemini_auth='"adc_no_project"'
-            if [ "$alert_if_missing" = "true" ]; then
-                errors+=("ADC found but no GCP project. Set vertex_ai.project in $config_file or export GOOGLE_CLOUD_PROJECT=your-project-id")
-            fi
-        elif [ -z "$gcp_location" ]; then
-            gemini_auth='"adc_no_location"'
-            if [ "$alert_if_missing" = "true" ]; then
-                errors+=("ADC found but no GCP location. Set vertex_ai.location in $config_file or export GOOGLE_CLOUD_LOCATION=your-region (e.g., us-central1)")
-            fi
-        else
-            # ADC, project, and location exist - verify credentials are still valid
-            # SECURITY: Token output discarded (> /dev/null), only exit code used
-            if gcloud auth application-default print-access-token > /dev/null 2>&1; then
-                gemini_auth='"vertex_ai_adc"'
-            else
-                gemini_auth='"adc_stale"'
+        if [ "$has_adc" = "true" ]; then
+            # ADC exists - check if GCP project AND location are set (both required for Vertex AI)
+            if [ -z "$gcp_project" ]; then
+                gemini_auth='"adc_no_project"'
                 if [ "$alert_if_missing" = "true" ]; then
-                    errors+=("Gemini ADC credentials are stale. Run: gcloud auth application-default login")
+                    errors+=("ADC found but no GCP project. Set vertex_ai.project in $config_file or export GOOGLE_CLOUD_PROJECT=your-project-id")
+                fi
+            elif [ -z "$gcp_location" ]; then
+                gemini_auth='"adc_no_location"'
+                if [ "$alert_if_missing" = "true" ]; then
+                    errors+=("ADC found but no GCP location. Set vertex_ai.location in $config_file or export GOOGLE_CLOUD_LOCATION=your-region (e.g., us-central1)")
+                fi
+            else
+                # ADC, project, and location exist - verify credentials are still valid
+                # SECURITY: Token output discarded (> /dev/null), only exit code used
+                if gcloud auth application-default print-access-token > /dev/null 2>&1; then
+                    gemini_auth='"vertex_ai_adc"'
+                else
+                    gemini_auth='"adc_stale"'
+                    if [ "$alert_if_missing" = "true" ]; then
+                        errors+=("Gemini ADC credentials are stale. Run: gcloud auth application-default login")
+                    fi
                 fi
             fi
-        fi
-    else
-        # No auth found
-        if [ "$alert_if_missing" = "true" ]; then
-            errors+=("Gemini auth not found. Options: 1) export GEMINI_API_KEY=key 2) export GOOGLE_CLOUD_PROJECT=proj && gcloud auth application-default login")
+        else
+            # No auth found
+            if [ "$alert_if_missing" = "true" ]; then
+                errors+=("Gemini auth not found. Options: 1) export GEMINI_API_KEY=key 2) export GOOGLE_CLOUD_PROJECT=proj && gcloud auth application-default login")
+            fi
         fi
     fi
 fi
 
 # Check 3: OpenAI API key
 # SECURITY: We only check if API key EXISTS ([ -n ] test), never echo its value
-if [ -n "${OPENAI_API_KEY:-}" ]; then
-    openai_auth="true"
-else
-    if [ "$alert_if_missing" = "true" ]; then
-        errors+=("OPENAI_API_KEY not set")
+openai_base_url="$effective_openai_base_url"
+if [ "$validate_openai" = "true" ]; then
+    if [ -n "$effective_openai_api_key" ]; then
+        openai_auth="true"
+        if [ -n "$openai_base_url" ]; then
+            # Note: We don't validate the URL format here, just note it exists
+            # The actual connectivity test happens in test_llm_clients.py
+            warnings+=("Using custom OpenAI endpoint: $openai_base_url")
+        fi
+    else
+        if [ "$alert_if_missing" = "true" ]; then
+            errors+=("OPENAI_API_KEY not set")
+        fi
     fi
 fi
 
@@ -148,14 +186,16 @@ if [ -f "$test_script" ]; then
 
     # Build test arguments based on what auth we found
     # Now includes model name to verify model access, not just auth
-    if [ -n "${GEMINI_API_KEY:-}" ] && [ -n "$gemini_model" ]; then
-        test_args="--gemini-api-key $gemini_model"
-    elif [ "$gemini_auth" = '"vertex_ai_adc"' ] && [ -n "$gcp_project" ] && [ -n "$gemini_model" ]; then
-        test_args="--vertex-ai $gcp_project $gcp_location $gemini_model"
+    if [ "$validate_gemini" = "true" ]; then
+        if [ -n "$effective_gemini_api_key" ] && [ -n "$gemini_model" ]; then
+            test_args="--gemini-api-key $gemini_model"
+        elif [ "$gemini_auth" = '"vertex_ai_adc"' ] && [ -n "$gcp_project" ] && [ -n "$gemini_model" ]; then
+            test_args="--vertex-ai $gcp_project $gcp_location $gemini_model"
+        fi
     fi
 
-    if [ -n "${OPENAI_API_KEY:-}" ] && [ -n "$openai_model" ]; then
-        test_args="$test_args --openai $openai_model"
+    if [ "$validate_openai" = "true" ] && [ -n "$effective_openai_api_key" ] && [ -n "$effective_openai_model" ]; then
+        test_args="$test_args --openai $effective_openai_model"
     fi
 
     # Run the test if we have any auth to test
@@ -166,24 +206,26 @@ if [ -f "$test_script" ]; then
         # NOTE: jq's // operator triggers on BOTH null AND false, so we use explicit checks
         if [ -n "$client_test_results" ]; then
             # Check for Gemini failures (check both api_key and vertex_ai results)
-            if echo "$client_test_results" | jq -e '.gemini_api_key' > /dev/null 2>&1; then
-                gemini_success=$(echo "$client_test_results" | jq -r '.gemini_api_key.success' 2>/dev/null)
-                if [ "$gemini_success" = "false" ]; then
-                    gemini_error=$(echo "$client_test_results" | jq -r '.gemini_api_key.error' 2>/dev/null)
-                    errors+=("Gemini model test failed: $gemini_error")
-                    gemini_auth='"test_failed"'
-                fi
-            elif echo "$client_test_results" | jq -e '.gemini_vertex_ai' > /dev/null 2>&1; then
-                gemini_success=$(echo "$client_test_results" | jq -r '.gemini_vertex_ai.success' 2>/dev/null)
-                if [ "$gemini_success" = "false" ]; then
-                    gemini_error=$(echo "$client_test_results" | jq -r '.gemini_vertex_ai.error' 2>/dev/null)
-                    errors+=("Gemini model test failed: $gemini_error")
-                    gemini_auth='"test_failed"'
+            if [ "$validate_gemini" = "true" ]; then
+                if echo "$client_test_results" | jq -e '.gemini_api_key' > /dev/null 2>&1; then
+                    gemini_success=$(echo "$client_test_results" | jq -r '.gemini_api_key.success' 2>/dev/null)
+                    if [ "$gemini_success" = "false" ]; then
+                        gemini_error=$(echo "$client_test_results" | jq -r '.gemini_api_key.error' 2>/dev/null)
+                        errors+=("Gemini model test failed: $gemini_error")
+                        gemini_auth='"test_failed"'
+                    fi
+                elif echo "$client_test_results" | jq -e '.gemini_vertex_ai' > /dev/null 2>&1; then
+                    gemini_success=$(echo "$client_test_results" | jq -r '.gemini_vertex_ai.success' 2>/dev/null)
+                    if [ "$gemini_success" = "false" ]; then
+                        gemini_error=$(echo "$client_test_results" | jq -r '.gemini_vertex_ai.error' 2>/dev/null)
+                        errors+=("Gemini model test failed: $gemini_error")
+                        gemini_auth='"test_failed"'
+                    fi
                 fi
             fi
 
             # Check for OpenAI failures
-            if echo "$client_test_results" | jq -e '.openai' > /dev/null 2>&1; then
+            if [ "$validate_openai" = "true" ] && echo "$client_test_results" | jq -e '.openai' > /dev/null 2>&1; then
                 openai_success=$(echo "$client_test_results" | jq -r '.openai.success' 2>/dev/null)
                 if [ "$openai_success" = "false" ]; then
                     openai_error=$(echo "$client_test_results" | jq -r '.openai.error' 2>/dev/null)

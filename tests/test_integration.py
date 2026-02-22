@@ -15,6 +15,31 @@ class TestFullWorkflow:
         """Return path to plugin root."""
         return Path(__file__).parent.parent
 
+    @pytest.fixture
+    def isolated_env(self, tmp_path):
+        """Environment with all LLM auth vars cleared for deterministic tests."""
+        env = os.environ.copy()
+        for key in [
+            "GEMINI_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+            "OPENAI_MODEL",
+            "GOOGLE_CLOUD_PROJECT",
+            "GOOGLE_CLOUD_LOCATION",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "DEEPPLAN_GEMINI_API_KEY",
+            "DEEPPLAN_OPENAI_API_KEY",
+            "DEEPPLAN_OPENAI_BASE_URL",
+            "DEEPPLAN_OPENAI_MODEL",
+            "DEEPPLAN_GOOGLE_CLOUD_PROJECT",
+            "DEEPPLAN_GOOGLE_CLOUD_LOCATION",
+            "DEEPPLAN_GOOGLE_APPLICATION_CREDENTIALS",
+        ]:
+            env.pop(key, None)
+
+        env["HOME"] = str(tmp_path)
+        return env
+
     @pytest.mark.integration
     def test_validate_env_outputs_valid_json(self, plugin_root):
         """Should run validate-env.sh and return valid JSON structure."""
@@ -38,7 +63,7 @@ class TestFullWorkflow:
         assert "plugin_root" in output
 
     @pytest.mark.integration
-    def test_review_exits_1_without_auth(self, plugin_root, tmp_path):
+    def test_review_exits_1_without_auth(self, plugin_root, tmp_path, isolated_env):
         """Should exit 1 when no LLM auth configured."""
         import sys
         sys.path.insert(0, str(plugin_root / "scripts"))
@@ -56,12 +81,7 @@ class TestFullWorkflow:
             initial_file=str(planning_dir / "spec.md"),
         )
 
-        env = os.environ.copy()
-        # Clear all LLM auth
-        env.pop("GEMINI_API_KEY", None)
-        env.pop("OPENAI_API_KEY", None)
-        env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
-        env["HOME"] = str(tmp_path)  # No ADC here
+        env = isolated_env.copy()
 
         result = subprocess.run(
             ["uv", "run",
@@ -76,6 +96,95 @@ class TestFullWorkflow:
         assert result.returncode == 1
         output = json.loads(result.stdout)
         assert "error" in output
+
+    @pytest.mark.integration
+    def test_validate_env_scoped_openai_ignores_generic_gemini(self, plugin_root, isolated_env):
+        """DEEPPLAN OpenAI scope should not fail on generic Gemini state."""
+        env = isolated_env.copy()
+        env["DEEPPLAN_OPENAI_API_KEY"] = "test-openai-key"
+        env["DEEPPLAN_OPENAI_MODEL"] = "gpt-5.2"
+        env["GEMINI_API_KEY"] = "test-gemini-key"
+
+        result = subprocess.run(
+            [str(plugin_root / "scripts" / "checks" / "validate-env.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = json.loads(result.stdout)
+        assert all("Gemini" not in err and "ADC" not in err for err in output["errors"])
+
+    @pytest.mark.integration
+    def test_validate_env_scoped_openai_429_class_failure_signature(self, plugin_root, isolated_env, tmp_path):
+        """Scoped OpenAI failures should produce OpenAI-only model test errors."""
+        env = isolated_env.copy()
+        env["DEEPPLAN_OPENAI_API_KEY"] = "test-openai-key"
+        env["DEEPPLAN_OPENAI_MODEL"] = "gpt-5.2"
+
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        fake_uv = fake_bin / "uv"
+        fake_uv.write_text(
+            "#!/usr/bin/env bash\n"
+            "cat <<'JSON'\n"
+            '{"openai":{"success":false,"error":"Error code: 429 - insufficient_quota"}}\n'
+            "JSON\n"
+            "exit 1\n"
+        )
+        fake_uv.chmod(0o755)
+        env["PATH"] = f"{fake_bin}:{env['PATH']}"
+
+        result = subprocess.run(
+            [str(plugin_root / "scripts" / "checks" / "validate-env.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = json.loads(result.stdout)
+        assert output["openai_auth"] is False
+        assert output["gemini_auth"] is None
+        assert any("OpenAI model test failed" in err for err in output["errors"])
+        assert any("429" in err for err in output["errors"])
+        assert all("Gemini" not in err and "ADC" not in err for err in output["errors"])
+
+    @pytest.mark.integration
+    def test_validate_env_scoped_gemini_ignores_generic_openai(self, plugin_root, isolated_env):
+        """DEEPPLAN Gemini scope should not fail on generic OpenAI state."""
+        env = isolated_env.copy()
+        env["DEEPPLAN_GEMINI_API_KEY"] = "test-gemini-key"
+        env["OPENAI_API_KEY"] = "test-openai-key"
+
+        result = subprocess.run(
+            [str(plugin_root / "scripts" / "checks" / "validate-env.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = json.loads(result.stdout)
+        assert all("OpenAI" not in err and "OPENAI" not in err for err in output["errors"])
+
+    @pytest.mark.integration
+    def test_validate_env_generic_fallback_without_deepplan_scope(self, plugin_root, isolated_env):
+        """Without DEEPPLAN scope, generic provider fallback should still apply."""
+        env = isolated_env.copy()
+        env["OPENAI_API_KEY"] = "test-openai-key"
+
+        result = subprocess.run(
+            [str(plugin_root / "scripts" / "checks" / "validate-env.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        output = json.loads(result.stdout)
+        assert any("Gemini" in err for err in output["errors"])
 
 
 class TestPluginStructure:
@@ -117,6 +226,44 @@ class TestPluginStructure:
         """Should have deep-plan skill at skills/deep-plan/SKILL.md."""
         skill_file = plugin_root / "skills" / "deep-plan" / "SKILL.md"
         assert skill_file.exists(), f"Missing: {skill_file}"
+
+    def test_skill_preflight_path_supports_hybrid_lookup(self, plugin_root):
+        """SKILL preflight path discovery should prioritize plugin root and installed cache before pwd fallback."""
+        skill_file = plugin_root / "skills" / "deep-plan" / "SKILL.md"
+        content = skill_file.read_text()
+
+        # Check for the resolve_script_path function
+        assert 'resolve_script_path()' in content
+        assert 'local script_rel_path="$1"' in content
+
+        # Strategy 1: CLAUDE_PLUGIN_ROOT priority
+        assert 'CLAUDE_PLUGIN_ROOT' in content
+        assert 'local candidate="$CLAUDE_PLUGIN_ROOT/$script_rel_path"' in content
+
+        # Strategy 2: installed plugin cache fallback
+        assert 'for root in "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins"; do' in content
+        assert 'find "$root" -path "*/deep-plan/*/$script_rel_path"' in content
+
+        # Strategy 3: pwd fallback (dev only)
+        assert 'find "$(pwd)" -path "*/$script_rel_path" -type f' in content
+
+        # Check for usage
+        assert 'resolve_script_path "scripts/checks/validate-env.sh"' in content
+
+        # Check for helpful diagnostics
+        assert 'Attempted roots:' in content
+        assert 'Reinstall plugin: /plugin install deep-plan' in content
+
+    def test_skill_recoverable_preflight_offers_three_way_choice(self, plugin_root):
+        """Recoverable preflight failures should expose opus/skip/exit options."""
+        skill_file = plugin_root / "skills" / "deep-plan" / "SKILL.md"
+        content = skill_file.read_text()
+
+        assert 'External LLM preflight failed. How should plan review be handled?' in content
+        assert 'Use Claude Opus for review (Recommended)' in content
+        assert 'Skip external review' in content
+        assert 'Exit to configure LLMs' in content
+        assert '429' in content
 
     def test_prompts_exist(self, plugin_root):
         """Should have plan_reviewer prompts."""

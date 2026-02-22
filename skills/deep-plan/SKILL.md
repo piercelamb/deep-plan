@@ -36,12 +36,63 @@ SECURITY:
 ```
 
 **Find and run validate-env.sh:**
+
+First, define the path resolution helper function:
 ```bash
-find "$(pwd)" -path "*/deep_plan/scripts/checks/validate-env.sh" -type f 2>/dev/null | head -1
+# Resolve script path with CLAUDE_PLUGIN_ROOT priority
+resolve_script_path() {
+  local script_rel_path="$1"  # e.g., "scripts/checks/validate-env.sh"
+
+  # Strategy 1: Use CLAUDE_PLUGIN_ROOT (official + most reliable)
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    local candidate="$CLAUDE_PLUGIN_ROOT/$script_rel_path"
+    if [ -f "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+
+  # Strategy 2: Search known Claude plugin install/cache roots
+  local root
+  for root in "$HOME/.claude/plugins/cache" "$HOME/.claude/plugins"; do
+    if [ -d "$root" ]; then
+      local installed_result
+      installed_result="$(find "$root" -path "*/deep-plan/*/$script_rel_path" -type f 2>/dev/null | sort | head -n1)"
+      if [ -n "$installed_result" ]; then
+        echo "$installed_result"
+        return 0
+      fi
+    fi
+  done
+
+  # Strategy 3: Search from pwd (development fallback)
+  local pwd_result
+  pwd_result="$(find "$(pwd)" -path "*/$script_rel_path" -type f 2>/dev/null | head -n1)"
+  if [ -n "$pwd_result" ]; then
+    echo "$pwd_result"
+    return 0
+  fi
+
+  # Not found
+  echo "ERROR: $script_rel_path not found" >&2
+  echo "  CLAUDE_PLUGIN_ROOT: ${CLAUDE_PLUGIN_ROOT:-<not set>}" >&2
+  echo "  Current directory: $(pwd)" >&2
+  echo "  Attempted roots:" >&2
+  echo "    - ${CLAUDE_PLUGIN_ROOT:-<unset>}" >&2
+  echo "    - $HOME/.claude/plugins/cache" >&2
+  echo "    - $HOME/.claude/plugins" >&2
+  echo "    - $(pwd)" >&2
+  echo "  Next steps:" >&2
+  echo "    - Reinstall plugin: /plugin install deep-plan" >&2
+  echo "    - Or run with local plugin: claude --plugin-dir /path/to/deep-plan" >&2
+  return 1
+}
 ```
 
+Now use it to find and run validate-env.sh:
 ```bash
-bash <script_path>
+script_path="$(resolve_script_path "scripts/checks/validate-env.sh")" || exit 1
+bash "$script_path"
 ```
 
 **Parse the JSON output:**

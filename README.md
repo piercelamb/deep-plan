@@ -406,6 +406,13 @@ Edit `config.json` at the plugin root:
 
 ### Gemini (choose one)
 
+**deep-plan specific variables (highest priority):**
+- `DEEPPLAN_GEMINI_API_KEY` - Gemini API key for deep-plan (overrides `GEMINI_API_KEY`)
+- `DEEPPLAN_GOOGLE_APPLICATION_CREDENTIALS` - ADC path for deep-plan (overrides `GOOGLE_APPLICATION_CREDENTIALS`)
+- `DEEPPLAN_GOOGLE_CLOUD_PROJECT` - GCP project for deep-plan (overrides `GOOGLE_CLOUD_PROJECT`)
+- `DEEPPLAN_GOOGLE_CLOUD_LOCATION` - GCP location for deep-plan (overrides `GOOGLE_CLOUD_LOCATION`)
+
+**Standard Gemini/Google variables (fallback):**
 - `GEMINI_API_KEY` - [AI Studio API key](https://aistudio.google.com/apikey)
 - `GOOGLE_APPLICATION_CREDENTIALS` - Path to service account JSON
 - Default ADC at `~/.config/gcloud/application_default_credentials.json` ([setup guide](https://cloud.google.com/docs/authentication/application-default-credentials))
@@ -416,7 +423,67 @@ For Vertex AI, also set (or set in `config.json`):
 
 ### OpenAI
 
+**deep-plan specific variables (highest priority):**
+- `DEEPPLAN_OPENAI_API_KEY` - API key for deep-plan (overrides `OPENAI_API_KEY`)
+- `DEEPPLAN_OPENAI_BASE_URL` - Custom API endpoint for deep-plan (overrides `OPENAI_BASE_URL`)
+- `DEEPPLAN_OPENAI_MODEL` - Model name for deep-plan (overrides `OPENAI_MODEL`)
+  - **Note:** Preflight validation (`/deep-plan`) tests the effective model after applying precedence: `DEEPPLAN_OPENAI_MODEL` > `OPENAI_MODEL` > `config.json`
+
+**Standard OpenAI variables (fallback):**
 - `OPENAI_API_KEY` - [OpenAI API key](https://platform.openai.com/api-keys)
+- `OPENAI_BASE_URL` (optional) - Custom API endpoint for OpenAI-compatible services (SDK v1.0+)
+  - Example: `https://openai.compatible.com` (LiteLLM)
+  - Example: `http://localhost:4000` (LocalAI)
+  - If not set, defaults to `https://api.openai.com/v1`
+- `OPENAI_MODEL` (optional) - Override model from config.json
+
+**Variable precedence:** `DEEPPLAN_OPENAI_*` variables take precedence over `OPENAI_*` variables. This allows you to use different settings for deep-plan while keeping your standard OpenAI configuration intact.
+
+**Provider selection during preflight (`validate-env.sh`):**
+- If any `DEEPPLAN_OPENAI_*` or Gemini-related `DEEPPLAN_*` variable is set, preflight validates only the explicitly scoped provider(s)
+- If no provider-scoping `DEEPPLAN_*` variables are set, preflight falls back to generic provider discovery (`GEMINI_*` / `OPENAI_*`)
+- This prevents non-target provider failures from blocking `/deep-plan` when you intentionally scope to one provider
+
+**Note:** This plugin requires OpenAI SDK v1.0+. The legacy `OPENAI_API_BASE` environment variable is not supported.
+
+### Using OpenAI-Compatible APIs
+
+deep-plan supports any OpenAI-compatible API endpoint (LiteLLM, LocalAI, etc.):
+
+**Example 1: Using deep-plan specific variables (recommended)**
+
+```bash
+# Use DEEPPLAN_OPENAI_* variables to keep deep-plan settings separate
+export DEEPPLAN_OPENAI_BASE_URL="https://openai.compatible.com"
+export DEEPPLAN_OPENAI_API_KEY="sk-your-api-key"
+export DEEPPLAN_OPENAI_MODEL="gpt-4"
+/deep-plan @planning/spec.md
+```
+
+**Example 2: Using standard OpenAI variables**
+
+```bash
+# Use OPENAI_* variables (shared with other tools)
+export OPENAI_BASE_URL="https://openai.compatible.com"
+export OPENAI_API_KEY="sk-your-api-key"
+export OPENAI_MODEL="gpt-4"
+/deep-plan @planning/spec.md
+```
+
+**Example: Using LocalAI**
+
+```bash
+export OPENAI_BASE_URL="http://localhost:8080/v1"
+export OPENAI_API_KEY="dummy-key"  # LocalAI doesn't require real key
+export OPENAI_MODEL="gpt-4"
+/deep-plan @planning/spec.md
+```
+
+The `OPENAI_BASE_URL` environment variable allows routing OpenAI API calls through:
+- **LiteLLM**: Unified API for 100+ LLMs (Claude, Gemini, etc.)
+- **LocalAI**: Self-hosted OpenAI-compatible server
+- **Azure OpenAI**: Enterprise OpenAI deployment
+- **Custom proxies**: Rate limiting, caching, monitoring
 
 ## Requirements
 
@@ -493,6 +560,51 @@ Your API keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`) are:
 **Solution**:
 - Increase `llm_client.timeout_seconds` in config.json
 - Check your API quotas and rate limits
+
+## Local Development
+
+When developing deep-plan:
+
+### Avoiding Path Conflicts
+
+The plugin uses `CLAUDE_PLUGIN_ROOT` to locate its scripts. When you have both an installed plugin AND a local git clone, path resolution prioritizes the installed version to prevent version mismatches.
+
+**Best practices:**
+
+1. **Install as plugin** (marketplace or manual) for normal use
+2. **Clone separately** for development: `git clone https://github.com/piercelamb/deep-plan.git ~/dev/deep-plan`
+3. **Avoid**: Cloning deep-plan inside project directories where you use it
+
+### Testing Local Changes
+
+**Option A: Update installed plugin files directly**
+```bash
+# Edit files in your installed plugin location
+vim ~/.claude/plugins/deep-plan/skills/deep-plan/SKILL.md
+```
+
+**Option B: Override CLAUDE_PLUGIN_ROOT**
+```bash
+# Point to your development copy
+export CLAUDE_PLUGIN_ROOT=~/dev/deep-plan
+/deep-plan @planning/test-spec.md
+```
+
+**Option C: Use --plugin-dir flag**
+```bash
+# Launch Claude Code with your development copy
+claude --plugin-dir ~/dev/deep-plan
+```
+
+### Path Resolution Behavior
+
+The plugin's path resolution follows this priority:
+
+1. **CLAUDE_PLUGIN_ROOT** (most reliable) - Set by Claude Code when plugin is loaded
+2. **Installed plugin roots** - Searches known Claude plugin install/cache locations (`~/.claude/plugins/cache`, `~/.claude/plugins`)
+3. **Find from pwd** (development fallback) - Searches current directory tree
+
+If resolution fails, preflight prints attempted roots and direct recovery steps (`/plugin install deep-plan` or `claude --plugin-dir <path>`).
 
 ## Testing
 

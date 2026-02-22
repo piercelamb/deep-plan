@@ -16,6 +16,7 @@ import os
 import json
 import time
 import argparse
+import subprocess
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -24,6 +25,11 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from lib.config import load_session_config
 from lib.prompts import load_prompts, format_prompt
+
+
+def get_env(name, default=None):
+    """Read env with DEEPPLAN_ override precedence."""
+    return os.environ.get(f"DEEPPLAN_{name}") or os.environ.get(name, default)
 
 
 def load_plan(planning_dir: Path) -> str:
@@ -60,7 +66,7 @@ def get_gemini_client(config: dict):
         return None, "not_installed"
 
     # Option 1: API Key
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = get_env("GEMINI_API_KEY")
     if api_key:
         client = genai.Client(api_key=api_key)
         return client, "api_key"
@@ -70,7 +76,6 @@ def get_gemini_client(config: dict):
 
     project = vertex_config.get("project")
     if not project:
-        import subprocess
         try:
             result = subprocess.run(
                 ["gcloud", "config", "get-value", "project"],
@@ -82,12 +87,12 @@ def get_gemini_client(config: dict):
             pass
 
     if not project:
-        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        project = get_env("GOOGLE_CLOUD_PROJECT")
 
-    location = vertex_config.get("location") or os.environ.get("GOOGLE_CLOUD_LOCATION")
+    location = vertex_config.get("location") or get_env("GOOGLE_CLOUD_LOCATION")
 
     adc_path = Path.home() / ".config/gcloud/application_default_credentials.json"
-    google_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    google_creds = get_env("GOOGLE_APPLICATION_CREDENTIALS")
     has_adc = (google_creds and Path(google_creds).exists()) or adc_path.exists()
 
     if has_adc and project and location:
@@ -113,7 +118,7 @@ def get_gemini_client(config: dict):
 
 def check_openai_available() -> bool:
     """Check if OpenAI API key is available."""
-    return bool(os.environ.get("OPENAI_API_KEY"))
+    return bool(get_env("OPENAI_API_KEY"))
 
 
 def review_with_gemini(plan_content: str, system_prompt: str, user_prompt: str, config: dict) -> dict:
@@ -123,7 +128,7 @@ def review_with_gemini(plan_content: str, system_prompt: str, user_prompt: str, 
     if not client:
         return {"success": False, "provider": "gemini", "error": f"No auth available: {auth_method}"}
 
-    model_name = os.environ.get("GEMINI_MODEL", config["models"]["gemini"])
+    model_name = get_env("GEMINI_MODEL") or config["models"]["gemini"]
 
     try:
         response = call_with_retry(
@@ -152,7 +157,8 @@ def review_with_gemini(plan_content: str, system_prompt: str, user_prompt: str, 
 
 def review_with_openai(plan_content: str, system_prompt: str, user_prompt: str, config: dict) -> dict:
     """Run OpenAI review."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    # DEEPPLAN_OPENAI_ prefix takes precedence over standard OPENAI_ variables
+    api_key = get_env("OPENAI_API_KEY")
     if not api_key:
         return {"success": False, "provider": "openai", "error": "OPENAI_API_KEY not set"}
 
@@ -161,11 +167,18 @@ def review_with_openai(plan_content: str, system_prompt: str, user_prompt: str, 
     except ImportError:
         return {"success": False, "provider": "openai", "error": "openai package not installed"}
 
-    model_name = os.environ.get("OPENAI_MODEL", config["models"]["chatgpt"])
+    model_name = get_env("OPENAI_MODEL") or config["models"]["chatgpt"]
     timeout = config["llm_client"]["timeout_seconds"]
 
+    # Support custom base URL for OpenAI-compatible APIs (LiteLLM, LocalAI, etc.)
+    base_url = get_env("OPENAI_BASE_URL")
+
     try:
-        client = OpenAI(api_key=api_key, timeout=timeout)
+        if base_url:
+            client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        else:
+            client = OpenAI(api_key=api_key, timeout=timeout)
+
         response = call_with_retry(
             lambda: client.chat.completions.create(
                 model=model_name,
@@ -180,6 +193,7 @@ def review_with_openai(plan_content: str, system_prompt: str, user_prompt: str, 
             "success": True,
             "provider": "openai",
             "model": model_name,
+            "base_url": base_url,
             "analysis": response.choices[0].message.content
         }
     except Exception as e:
@@ -187,6 +201,7 @@ def review_with_openai(plan_content: str, system_prompt: str, user_prompt: str, 
             "success": False,
             "provider": "openai",
             "model": model_name,
+            "base_url": base_url,
             "error": str(e)
         }
 
