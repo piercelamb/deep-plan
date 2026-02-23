@@ -25,7 +25,7 @@ index.md MUST contain two blocks at the top:
 
 ## PROJECT_CONFIG Block
 
-**index.md MUST start with a PROJECT_CONFIG block:**
+**index.md MUST contain a PROJECT_CONFIG block at the top:**
 
 ```markdown
 <!-- PROJECT_CONFIG
@@ -64,7 +64,7 @@ END_PROJECT_CONFIG -->
 
 ## SECTION_MANIFEST Block
 
-**index.md MUST start with a SECTION_MANIFEST block:**
+**After PROJECT_CONFIG, index.md MUST contain a SECTION_MANIFEST block:**
 
 ```markdown
 <!-- SECTION_MANIFEST
@@ -81,7 +81,7 @@ END_MANIFEST -->
 
 ### SECTION_MANIFEST Rules
 
-- Must be at the TOP of index.md (before any other content)
+- Must appear after PROJECT_CONFIG and before any other content
 - One section per line, format: `section-NN-name` (e.g., `section-01-foundation`)
 - Section numbers must be two digits with leading zero (01, 02, ... 12)
 - Section names use lowercase with hyphens (no spaces or underscores)

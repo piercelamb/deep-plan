@@ -148,17 +148,11 @@ def generate_section_tasks(
     # Build semantic_id -> position mapping for all tasks
     semantic_to_position: dict[str, int] = {}
 
-    # create-section-index is step 18, position = step - 1 = 17
-    # Actually step 18 maps to position 18 (see TASK_IDS: step 18 -> position 17... wait no)
-    # Let me check: TASK_IDS has step 18 -> "create-section-index"
-    # Position = step - 1 = 17? No wait, the mapping in setup-planning-session is:
-    # Context tasks: positions 1-4
-    # Workflow tasks: step 6 -> position 5, step 7 -> position 6, ..., step 22 -> position 21
-    # So step 18 -> position 17? No wait: step - 1 for steps 6+, but we have 4 context tasks
-    # Actually looking at build_semantic_to_position_map(): position = step_num - 1
-    # So step 18 -> position 17
-    # But generate-section-tasks is step 19 -> position 18
-    # And section tasks start at position 19 (SECTION_INSERT_POSITION)
+    # Position mapping: context tasks occupy positions 1-4, workflow steps
+    # start at position 5 (step 6 -> position 5). Formula: position = step_num - 1.
+    # create-section-index is step 18 -> position 17.
+    # generate-section-tasks is step 19 -> position 18.
+    # Section tasks start at position 19 (SECTION_INSERT_POSITION).
     semantic_to_position["create-section-index"] = 17
     semantic_to_position["generate-section-tasks"] = 18
     semantic_to_position["final-verification"] = final_ver_pos

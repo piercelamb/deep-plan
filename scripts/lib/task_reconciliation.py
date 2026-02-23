@@ -29,6 +29,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Self
 
+from lib.task_storage import ConflictInfo, CurrentTask
+
 
 class TaskListSource(StrEnum):
     """Source of the task list ID."""
@@ -120,17 +122,6 @@ class TaskListContext:
         )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CurrentTask:
-    """A task read from the task list directory."""
-
-    id: str
-    subject: str
-    status: str
-    description: str
-    active_form: str
-
-
 def read_current_tasks(task_list_id: str | None) -> dict[int, CurrentTask]:
     """Read current tasks from ~/.claude/tasks/<task_list_id>/
 
@@ -170,23 +161,6 @@ def read_current_tasks(task_list_id: str | None) -> dict[int, CurrentTask]:
             continue
 
     return tasks
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConflictInfo:
-    """Information about a task list conflict."""
-
-    task_list_id: str
-    existing_task_count: int
-    sample_subjects: list[str]
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for JSON output."""
-        return {
-            "task_list_id": self.task_list_id,
-            "existing_task_count": self.existing_task_count,
-            "sample_subjects": self.sample_subjects,
-        }
 
 
 def check_for_conflict(

@@ -63,9 +63,9 @@ Example: If the JSON output has 5 prompt files, send a single message with 5 Tas
 ### 4. Verify Files Were Written
 
 **The SubagentStop hook writes files automatically.** When each subagent completes, a hook:
-1. Parses the subagent's transcript for JSON output
-2. Extracts `sections_dir`, `filename`, and `content`
-3. Writes the file to `{sections_dir}/{filename}`
+1. Extracts the prompt file path from the first user message
+2. Derives the destination directory and filename from the prompt path structure
+3. Extracts the last assistant message as raw markdown content and writes it to the destination
 
 **You must verify the files exist** - hooks run in isolation and don't report back to Claude.
 
