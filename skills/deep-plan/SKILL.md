@@ -35,14 +35,21 @@ SECURITY:
  Note: DEEP-PLAN will write many .md files to the planning directory you pass it
 ```
 
-**Find and run validate-env.sh:**
+**CRITICAL: Locate plugin root BEFORE running any scripts.**
+
+The SessionStart hook injects `DEEP_PLUGIN_ROOT=<path>` into your context. Look for it now — it appears alongside `DEEP_SESSION_ID` in your context from session startup. Use it as `plugin_root` for all script paths.
+
+**If `DEEP_PLUGIN_ROOT` is in your context**, run validate-env.sh directly:
 ```bash
-find "$(pwd)" -path "*/deep_plan/scripts/checks/validate-env.sh" -type f 2>/dev/null | head -1
+bash <DEEP_PLUGIN_ROOT value>/scripts/checks/validate-env.sh
 ```
 
+**Only if `DEEP_PLUGIN_ROOT` is NOT in your context** (hook didn't run), fall back to search:
 ```bash
-bash <script_path>
+find "$(pwd)" -name "validate-env.sh" -path "*/scripts/checks/*" -type f 2>/dev/null | head -1
 ```
+If not found: `find ~ -name "validate-env.sh" -path "*/scripts/checks/*" -path "*deep*plan*" -type f 2>/dev/null | head -1`
+Then run: `bash <found_path>`
 
 **Parse the JSON output:**
 ```json
@@ -56,7 +63,7 @@ bash <script_path>
 }
 ```
 
-**Store `plugin_root`** - it's used throughout the workflow.
+**Store `plugin_root`** from the JSON output - it's used throughout the workflow.
 
 ### 2. Handle Environment Errors
 

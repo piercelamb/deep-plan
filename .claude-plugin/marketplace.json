@@ -11,7 +11,7 @@
     {
       "name": "deep-project",
       "description": "Split vague project requirements into well-scoped units for /deep-plan",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "piercelamb",
         "url": "https://github.com/piercelamb"
@@ -27,7 +27,7 @@
     {
       "name": "deep-plan",
       "description": "AI-assisted deep planning with research, interview, external LLM review, and TDD approach",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "author": {
         "name": "piercelamb",
         "url": "https://github.com/piercelamb"
@@ -40,7 +40,7 @@
     {
       "name": "deep-implement",
       "description": "Implement code from /deep-plan sections with TDD, code review, and git workflow",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "piercelamb",
         "url": "https://github.com/piercelamb"

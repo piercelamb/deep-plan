@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Capture session_id and expose it via Claude's context.
+"""Capture session_id and plugin_root, expose via Claude's context.
 
 This hook reads session_id from the JSON payload on stdin and:
 1. Outputs it to stdout as additionalContext (Claude sees this directly)
-2. Optionally writes to CLAUDE_ENV_FILE if available (fallback for bash)
+2. Also captures CLAUDE_PLUGIN_ROOT as DEEP_PLUGIN_ROOT (for SKILL.md path resolution)
+3. Optionally writes to CLAUDE_ENV_FILE if available (fallback for bash)
 
 The additionalContext approach is primary because:
 - CLAUDE_ENV_FILE is unreliable (empty string bug, not sourced on resume)
 - After /clear, env var has OLD session_id while hook gets NEW one
 - additionalContext bypasses these issues by flowing through Claude's context
+- CLAUDE_PLUGIN_ROOT is only available in hooks.json, not in SKILL.md files
 
 Usage:
     This script is called automatically by Claude Code when configured
@@ -53,18 +55,28 @@ def main() -> int:
     session_id = payload.get("session_id")
     transcript_path = payload.get("transcript_path")
 
+    # Capture CLAUDE_PLUGIN_ROOT (available because hooks.json expands it)
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "")
+
     # Need at least session_id to proceed
     if not session_id:
         return 0
 
-    # Check if DEEP_SESSION_ID is already set correctly
+    # Build additionalContext lines
+    context_parts = []
+
     existing_session_id = os.environ.get("DEEP_SESSION_ID")
     if existing_session_id != session_id:
-        # Not set or doesn't match - output to Claude's context via additionalContext
+        context_parts.append(f"DEEP_SESSION_ID={session_id}")
+
+    if plugin_root:
+        context_parts.append(f"DEEP_PLUGIN_ROOT={plugin_root}")
+
+    if context_parts:
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "SessionStart",
-                "additionalContext": f"DEEP_SESSION_ID={session_id}",
+                "additionalContext": "\n".join(context_parts),
             }
         }
         print(json.dumps(output))
