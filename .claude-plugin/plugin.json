@@ -1,7 +1,7 @@
 {
   "name": "deep-plan",
   "description": "AI-assisted deep planning with research, interview, external LLM review, and TDD approach",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": {
     "name": "piercelamb",
     "url": "https://github.com/piercelamb"

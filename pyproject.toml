@@ -1,6 +1,6 @@
 [project]
 name = "deep-plan"
-version = "0.3.1"
+version = "0.3.2"
 description = "Claude Code deep planning plugin"
 requires-python = ">=3.11"
 dependencies = [

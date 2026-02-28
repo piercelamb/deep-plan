@@ -267,3 +267,52 @@ class TestCaptureSessionIdHook:
         captured = capsys.readouterr()
         output = json.loads(captured.out)
         assert output["hookSpecificOutput"]["additionalContext"] == "DEEP_SESSION_ID=test-session-789"
+
+    def test_includes_plugin_root_when_available(self, hook_module, capsys):
+        """Should include DEEP_PLUGIN_ROOT in additionalContext when CLAUDE_PLUGIN_ROOT is set."""
+        payload = {"session_id": "test-session-123"}
+
+        with patch.dict("os.environ", {"CLAUDE_PLUGIN_ROOT": "/path/to/plugin"}, clear=True):
+            with patch("sys.stdin", StringIO(json.dumps(payload))):
+                result = hook_module.main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "DEEP_SESSION_ID=test-session-123" in context
+        assert "DEEP_PLUGIN_ROOT=/path/to/plugin" in context
+
+    def test_omits_plugin_root_when_not_available(self, hook_module, capsys):
+        """Should NOT include DEEP_PLUGIN_ROOT when CLAUDE_PLUGIN_ROOT is not set."""
+        payload = {"session_id": "test-session-456"}
+
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("sys.stdin", StringIO(json.dumps(payload))):
+                result = hook_module.main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        context = output["hookSpecificOutput"]["additionalContext"]
+        assert "DEEP_PLUGIN_ROOT" not in context
+        assert "DEEP_SESSION_ID=test-session-456" in context
+
+    def test_plugin_root_only_when_session_id_matches(self, hook_module, capsys):
+        """Should still output plugin_root even when session_id already matches."""
+        payload = {"session_id": "existing-session"}
+
+        with patch.dict("os.environ", {
+            "DEEP_SESSION_ID": "existing-session",
+            "CLAUDE_PLUGIN_ROOT": "/path/to/plugin",
+        }, clear=True):
+            with patch("sys.stdin", StringIO(json.dumps(payload))):
+                result = hook_module.main()
+
+        assert result == 0
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        context = output["hookSpecificOutput"]["additionalContext"]
+        # Session ID matches so it's not in context, but plugin_root is
+        assert "DEEP_SESSION_ID" not in context
+        assert "DEEP_PLUGIN_ROOT=/path/to/plugin" in context
