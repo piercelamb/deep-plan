@@ -505,6 +505,31 @@ class TestWaitForStableFile:
         assert elapsed >= 0.25
         assert elapsed < 0.6
 
+    def test_elapsed_time_logged_in_milliseconds(self, tmp_path, monkeypatch):
+        """Debug log should report elapsed time in milliseconds, not seconds."""
+        f = tmp_path / "stable.jsonl"
+        f.write_text("content\n")
+
+        logged_messages = []
+        monkeypatch.setattr(_mod, "debug_log", lambda msg: logged_messages.append(msg))
+
+        wait_for_stable_file(str(f), stability_ms=100, poll_ms=25)
+
+        # Find the "File stable" log message
+        stable_msgs = [m for m in logged_messages if "File stable" in m]
+        assert len(stable_msgs) == 1, f"Expected 1 stable message, got {logged_messages}"
+
+        # Extract the reported ms value
+        import re
+        match = re.search(r'after (\d+)ms', stable_msgs[0])
+        assert match, f"No 'after Nms' found in: {stable_msgs[0]}"
+        reported_ms = int(match.group(1))
+
+        # The elapsed time should be in a reasonable millisecond range (50-500ms),
+        # not in the 0-1 range you'd get if reporting seconds
+        assert reported_ms >= 50, f"Elapsed {reported_ms}ms is too low — likely seconds not ms"
+        assert reported_ms < 2000, f"Elapsed {reported_ms}ms is unexpectedly high"
+
     def test_race_condition_simulation(self, hook_script, tmp_path):
         """Simulate the actual race: transcript incomplete when hook starts, completed during wait.
 

@@ -15,6 +15,12 @@ MANIFEST_START = '<!-- SECTION_MANIFEST'
 MANIFEST_END = 'END_MANIFEST -->'
 
 
+def _section_num(name: str) -> int:
+    """Extract section number for sorting. Returns 0 if pattern doesn't match."""
+    m = re.search(r'section-(\d+)', name)
+    return int(m.group(1)) if m else 0
+
+
 def parse_manifest_block(content: str) -> dict:
     """Parse the SECTION_MANIFEST block from index.md content.
 
@@ -113,12 +119,15 @@ def parse_manifest_block(content: str) -> dict:
         }
 
     # Sort by section number
-    sections.sort(key=lambda x: int(SECTION_NAME_PATTERN.match(x).group(1)))
+    sections.sort(key=_section_num)
 
     # Validate sequential numbering (warn if gaps)
     expected_num = 1
     for section in sections:
-        actual_num = int(SECTION_NAME_PATTERN.match(section).group(1))
+        match = SECTION_NAME_PATTERN.match(section)
+        if not match:
+            continue
+        actual_num = int(match.group(1))
         if actual_num != expected_num:
             warnings.append(
                 f"Section numbering gap: expected section-{expected_num:02d}, "
@@ -235,7 +244,7 @@ def get_completed_sections(sections_dir: Path) -> list[str]:
         completed.append(f.stem)
 
     # Sort by section number
-    completed.sort(key=lambda x: int(re.search(r'section-(\d+)', x).group(1)))
+    completed.sort(key=_section_num)
 
     return completed
 
