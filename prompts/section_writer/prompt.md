@@ -39,6 +39,7 @@ The section content must be **completely self-contained**. An implementer should
 - File paths for any code to be created/modified
 - Dependencies on other sections (reference only, don't duplicate content)
 - **CRITICAL** Remember that tests and code should only be fully specified if absolutely necessary. Stub definitions and docstrings are fine.
+- For Go projects: note file size constraints (ports: 100, domain: 250, service/adapter: 300, handler: 250, functions: 75 lines max). Plan one file per entity rather than large combined files.
 
 **Do NOT:**
 
