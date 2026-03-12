@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent to path for lib imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from lib.config import load_session_config, ConfigError
-from lib.sections import check_section_progress
+from lib.sections import check_section_progress, parse_manifest_block
 from lib.tasks import BATCH_SIZE
 
 
@@ -45,24 +45,53 @@ def load_prompt_template(plugin_root: Path) -> str:
     return template_path.read_text().strip()
 
 
-def fill_template(template: str, planning_dir: str, section_name: str) -> str:
+CONCERN_GUIDANCE = {
+    "scaffold": (
+        "This section is tagged as a **scaffold** concern. Only create stubs, "
+        "interfaces, module init. Do NOT implement logic.\n\n"
+        "Files created here — especially interface definitions, shared types, and "
+        "API contracts — become **context anchors** for all downstream sections. "
+        "Mark them explicitly (e.g., 'Context anchor: implementers read this before "
+        "writing service code') so the implementer knows to read them first."
+    ),
+    "functional": (
+        "This section is tagged as a **functional** concern. Core business logic. "
+        "Assume scaffold files exist.\n\n"
+        "Before describing implementation, list the scaffold context anchor files "
+        "(port interfaces, shared types, API contracts) that define this section's "
+        "boundaries. The implementer must read those files before writing code."
+    ),
+    "observability": "This section is tagged as an **observability** concern. Instrument existing code. Assume functional code exists.",
+    "configuration": "This section is tagged as a **configuration** concern. Config loading/validation. Assume functional code exists.",
+    "resilience": "This section is tagged as a **resilience** concern. Error handling, retries, health checks. Assume functional code exists.",
+    "integration": "This section is tagged as an **integration** concern. Cross-component wiring, end-to-end tests. Assume everything else exists.",
+}
+
+
+def fill_template(template: str, planning_dir: str, section_name: str, concern_type: str = "") -> str:
     """Fill in the prompt template placeholders.
 
     Args:
         template: The prompt template with placeholders
         planning_dir: Path to the planning directory
         section_name: Section name without .md extension (e.g., "section-01-setup")
+        concern_type: Optional concern type tag (e.g., "scaffold", "functional")
 
     Returns:
         Filled-in prompt ready for use
     """
     section_filename = f"{section_name}.md"
 
+    concern_block = ""
+    if concern_type and concern_type in CONCERN_GUIDANCE:
+        concern_block = f"## Concern Type: {concern_type}\n\n{CONCERN_GUIDANCE[concern_type]}\n\n"
+
     return (
         template
         .replace("{PLANNING_DIR}", planning_dir)
         .replace("{SECTION_FILENAME}", section_filename)
         .replace("{SECTION_NAME}", section_name)
+        .replace("{CONCERN_TYPE}", concern_block)
     )
 
 
@@ -206,13 +235,21 @@ def generate_batch_tasks(
     prompts_dir = planning_dir / "sections" / ".prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
 
+    # Extract concern tags from manifest (if any)
+    index_path = planning_dir / "sections" / "index.md"
+    section_concerns = {}
+    if index_path.exists():
+        manifest_result = parse_manifest_block(index_path.read_text())
+        if manifest_result.get("success"):
+            section_concerns = manifest_result.get("section_concerns", {})
+
     # Write prompt files for each section
     prompt_files = []
     planning_dir_str = str(planning_dir.resolve())
 
     for section_name in batch_sections:
-        # Write full prompt to file
-        filled_prompt = fill_template(template, planning_dir_str, section_name)
+        concern = section_concerns.get(section_name, "")
+        filled_prompt = fill_template(template, planning_dir_str, section_name, concern)
         prompt_file = write_prompt_file(prompts_dir, section_name, filled_prompt)
         prompt_files.append(str(prompt_file))
 

@@ -23,6 +23,7 @@ blocks around the output. Just the raw markdown content.
 The hook system will automatically write your output to:
 `{PLANNING_DIR}/sections/{SECTION_FILENAME}`
 
+{CONCERN_TYPE}
 ## Content Requirements
 
 The section content must be **completely self-contained**. An implementer should be able to:
@@ -40,6 +41,7 @@ The section content must be **completely self-contained**. An implementer should
 - Dependencies on other sections (reference only, don't duplicate content)
 - **CRITICAL** Remember that tests and code should only be fully specified if absolutely necessary. Stub definitions and docstrings are fine.
 - For Go projects: note file size constraints (ports: 100, domain: 250, service/adapter: 300, handler: 250, functions: 75 lines max). Plan one file per entity rather than large combined files.
+- If the plan designates **context anchor files** (interfaces, shared types, contracts) for this component: for scaffold sections, mark which files are anchors and will be read by downstream implementers. For all other sections, list prerequisite anchor files the implementer should read before starting.
 
 **Do NOT:**
 

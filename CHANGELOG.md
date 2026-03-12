@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Context anchor guidance** — Plan-writing rules, section writer prompts, and concern guidance now teach the LLM planner to designate context anchor files (interfaces, shared types, contracts). Scaffold sections mark which files are anchors; functional sections list prerequisite anchors to read first. Multi-language examples (Go, TypeScript, Rust, Python) included.
+- **Concern-based execution ordering** — Sections in the manifest can be tagged with concern types (`scaffold`, `functional`, `observability`, `configuration`, `resilience`, `integration`) to control execution order. Scaffold sections run first, ensuring interfaces exist before business logic.
+
 ## [0.3.2] - 2026-02-28
 
 ### Fixed
