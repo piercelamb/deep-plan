@@ -40,6 +40,7 @@ END_PROJECT_CONFIG -->
 |-------|----------|-------------|----------|
 | `runtime` | Yes | Language and tooling | `python-uv`, `python-pip`, `typescript-npm`, `typescript-pnpm`, `rust-cargo`, `go` |
 | `test_command` | Yes | Command to run tests | `uv run pytest`, `npm test`, `cargo test`, `go test ./...` |
+| `concern_ordering` | No | Enable concern-type execution ordering | `true`, `false` (default: `false`) |
 
 ### PROJECT_CONFIG Rules
 
@@ -88,6 +89,33 @@ END_MANIFEST -->
 - Numbers should be sequential (01, 02, 03...)
 - This block is parsed by scripts - the rest of index.md is for humans
 
+### Concern Tags (Optional)
+
+When `concern_ordering: true` is set in PROJECT_CONFIG, each manifest line can include a concern tag:
+
+```markdown
+<!-- SECTION_MANIFEST
+section-01-project-init scaffold
+section-02-domain-models functional
+section-03-api-handlers functional
+section-04-logging observability
+section-05-config configuration
+section-06-error-handling resilience
+section-07-external-apis integration
+END_MANIFEST -->
+```
+
+Valid concern types (executed in this order):
+1. `scaffold` — Directory structure, module init, stub routes, empty interfaces
+2. `functional` — Core logic, ports, domain types, service implementations
+3. `observability` — Structured logging, metrics, tracing
+4. `configuration` — Env vars, secrets, feature flags
+5. `resilience` — Error handling, graceful shutdown, health checks
+6. `integration` — Adapter wiring, cross-service calls, end-to-end tests
+
+Sections with the same concern execute in manifest number order.
+Sections without a concern tag execute after all tagged sections.
+
 ### Validation
 
 Scripts parse the SECTION_MANIFEST block to:
@@ -126,14 +154,16 @@ Which sections can run in parallel:
 
 ### Section Summaries
 
-Brief description of each section:
+Brief description of each section. When the project uses context anchor files (interfaces, shared types, contracts), note which anchors each section produces or depends on:
 
 ```markdown
 ### section-01-foundation
-Initial project setup and configuration.
+Initial project setup, shared types, and port interfaces.
+**Context anchors produced:** `internal/ports/service.go`, `types/types.go`
 
-### section-02-config
-Configuration loading and validation.
+### section-02-core-logic
+Service implementation against port interfaces.
+**Reads anchors from:** section-01 (`internal/ports/service.go`)
 ```
 
 ## Guidelines

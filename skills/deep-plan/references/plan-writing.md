@@ -52,6 +52,29 @@ LLMs instinctively write code when they see a feature request. This produces 25k
 - **Directory structure** (tree format)
 - **Configuration keys** (not full config files)
 
+### Context Anchor Files
+
+For projects with multiple components or services, the plan should designate certain
+files as **context anchors** — small, stable interface files that implementers must
+read before writing any service code. These collapse cross-component knowledge into
+a bounded set of files, keeping each implementation task's context window small.
+
+Common context anchor patterns by language:
+- **Go (hexagonal):** port interfaces (`internal/ports/*.go`), shared entity types
+  (`types/types.go`), protobuf service definitions (`.proto`)
+- **TypeScript:** shared type definitions (`types/index.ts`), API route contracts,
+  Zod schemas
+- **Rust:** trait definitions (`ports.rs`), shared types (`models.rs`),
+  protobuf/tonic service definitions
+- **Python:** protocol classes or ABCs (`ports.py`), Pydantic models (`models.py`),
+  shared type stubs
+
+When designating context anchors in the plan:
+- List them explicitly by file path under each component
+- Size them small (interface-only, no logic) — they should be readable in full
+- Mark them as scaffold-phase outputs so they exist before functional code
+- Note which downstream sections depend on each anchor file
+
 ### GOOD Examples
 
 ```python

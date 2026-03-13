@@ -14,6 +14,9 @@ SECTION_NAME_PATTERN = re.compile(r'^section-(\d{2})-([a-zA-Z0-9_-]+)$')
 MANIFEST_START = '<!-- SECTION_MANIFEST'
 MANIFEST_END = 'END_MANIFEST -->'
 
+# Valid concern types for concern-based execution ordering
+VALID_CONCERNS = ["scaffold", "functional", "observability", "configuration", "resilience", "integration"]
+
 
 def parse_manifest_block(content: str) -> dict:
     """Parse the SECTION_MANIFEST block from index.md content.
@@ -32,6 +35,7 @@ def parse_manifest_block(content: str) -> dict:
         dict with:
         - success: bool
         - sections: list of section names (empty if failed)
+        - section_concerns: dict mapping section name to concern tag (empty if no tags)
         - error: error message if failed, None otherwise
         - warnings: list of warning messages
     """
@@ -43,6 +47,7 @@ def parse_manifest_block(content: str) -> dict:
         return {
             "success": False,
             "sections": [],
+            "section_concerns": {},
             "error": "No SECTION_MANIFEST block found in index.md. "
                      "index.md must start with a SECTION_MANIFEST block. "
                      "See SKILL.md step 18 for the required format.",
@@ -54,6 +59,7 @@ def parse_manifest_block(content: str) -> dict:
         return {
             "success": False,
             "sections": [],
+            "section_concerns": {},
             "error": "SECTION_MANIFEST block not closed (missing END_MANIFEST -->)",
             "warnings": warnings,
         }
@@ -66,12 +72,14 @@ def parse_manifest_block(content: str) -> dict:
         return {
             "success": False,
             "sections": [],
+            "section_concerns": {},
             "error": "SECTION_MANIFEST block is empty. Add section definitions, one per line.",
             "warnings": warnings,
         }
 
     # Parse lines
     sections = []
+    section_concerns = {}
     seen_numbers = set()
 
     for line_num, line in enumerate(block_content.split('\n'), start=1):
@@ -79,13 +87,18 @@ def parse_manifest_block(content: str) -> dict:
         if not line:
             continue  # Skip empty lines
 
+        # Support optional concern tag: "section-01-foundation scaffold"
+        parts = line.split()
+        section_name = parts[0]
+
         # Validate section name format
-        match = SECTION_NAME_PATTERN.match(line)
+        match = SECTION_NAME_PATTERN.match(section_name)
         if not match:
             return {
                 "success": False,
                 "sections": [],
-                "error": f"Invalid section name on line {line_num}: '{line}'. "
+                "section_concerns": {},
+                "error": f"Invalid section name on line {line_num}: '{section_name}'. "
                          f"Expected format: section-NN-name (e.g., section-01-foundation). "
                          f"Section numbers must be two digits (01, 02, etc.).",
                 "warnings": warnings,
@@ -96,18 +109,31 @@ def parse_manifest_block(content: str) -> dict:
             return {
                 "success": False,
                 "sections": [],
-                "error": f"Duplicate section number on line {line_num}: '{line}'. "
+                "section_concerns": {},
+                "error": f"Duplicate section number on line {line_num}: '{section_name}'. "
                          f"Section {section_num} already defined.",
                 "warnings": warnings,
             }
 
+        # Extract optional concern tag
+        if len(parts) >= 2:
+            tag = parts[1]
+            if tag in VALID_CONCERNS:
+                section_concerns[section_name] = tag
+            else:
+                warnings.append(
+                    f"Unknown concern tag '{tag}' on line {line_num} for {section_name}. "
+                    f"Valid concerns: {', '.join(VALID_CONCERNS)}"
+                )
+
         seen_numbers.add(section_num)
-        sections.append(line)
+        sections.append(section_name)
 
     if not sections:
         return {
             "success": False,
             "sections": [],
+            "section_concerns": {},
             "error": "No valid sections found in SECTION_MANIFEST block",
             "warnings": warnings,
         }
@@ -129,6 +155,7 @@ def parse_manifest_block(content: str) -> dict:
     return {
         "success": True,
         "sections": sections,
+        "section_concerns": section_concerns,
         "error": None,
         "warnings": warnings,
     }

@@ -443,7 +443,9 @@ Managed via `pyproject.toml`:
 
 4. **Use sections for parallel work** - Each section file is self-contained. Multiple engineers (or Claude sessions) can work in parallel.
 
-5. **Compact before starting** - The workflow is token-intensive. Start with a fresh or compacted context.
+5. **Designate context anchors for multi-service projects** - Mark small, stable interface files (port interfaces, shared types, API contracts) as context anchors in your plan. Scaffold sections produce them; functional sections reference them. This keeps each implementer's context window small by collapsing cross-component knowledge into a few bounded files.
+
+6. **Compact before starting** - The workflow is token-intensive. Start with a fresh or compacted context.
 
 ## Security & Privacy
 
