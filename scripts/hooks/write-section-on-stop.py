@@ -87,7 +87,7 @@ def wait_for_stable_file(path: str, stability_ms: int = 200, timeout_s: float = 
             last_size = size
             stable_since = time.time()
         elif (time.time() - stable_since) >= stability_ms / 1000:
-            debug_log(f"File stable at {size} bytes after {(time.time() - (stable_since - stability_ms / 1000)):.0f}ms")
+            debug_log(f"File stable at {size} bytes after {(time.time() - (stable_since - stability_ms / 1000)) * 1000:.0f}ms")
             return
 
         time.sleep(poll_ms / 1000)

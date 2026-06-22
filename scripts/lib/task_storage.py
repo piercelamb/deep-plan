@@ -82,39 +82,6 @@ def read_current_tasks(task_list_id: str) -> dict[int, CurrentTask]:
     return result
 
 
-def needs_migration(current_tasks: dict[int, CurrentTask]) -> bool:
-    """Check if tasks have old structure that needs migration.
-
-    Old structure (broken):
-    - Position 19: "Write Section Files"
-    - Position 20: "Final Verification"
-    - Position 21: "Output Summary"
-    - Positions 22+: Section tasks (batch and section tasks)
-    - Final Verification blockedBy 19 (write-sections), NOT the last batch
-
-    New structure (correct):
-    - Positions 19+: Section tasks (batch and section tasks)
-    - Final Verification at position 19 + section_count
-    - Output Summary at position 19 + section_count + 1
-    - Final Verification blockedBy last batch
-
-    Returns:
-        True if old structure detected (has section at 22+ AND Final Verification at 20)
-    """
-    # Check for section task at position 22
-    has_section_at_22 = False
-    if 22 in current_tasks:
-        subject_lower = current_tasks[22].subject.lower()
-        has_section_at_22 = "batch" in subject_lower or "section" in subject_lower
-
-    # Check for Final Verification at position 20
-    has_final_at_20 = False
-    if 20 in current_tasks:
-        has_final_at_20 = "Final Verification" in current_tasks[20].subject
-
-    return has_section_at_22 and has_final_at_20
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TaskToWrite:
     """A task to write to disk."""
