@@ -35,12 +35,18 @@ def get_tasks_dir(task_list_id: str) -> Path:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CurrentTask:
-    """A task read from disk."""
+    """A task read from disk or task list.
 
-    position: int
-    subject: str
-    status: str
+    Used by both task_storage (disk-based reads with position/blocks/blocked_by)
+    and task_reconciliation (reconciliation with id/active_form).
+    """
+
+    id: str = ""
+    position: int = 0
+    subject: str = ""
+    status: str = ""
     description: str = ""
+    active_form: str = ""
     blocks: tuple[str, ...] = ()
     blocked_by: tuple[str, ...] = ()
 
