@@ -567,3 +567,86 @@ class TestWaitForStableFile:
         # Must contain the REAL section content, not the intermediate message
         assert "REAL section content" in content
         assert "different approach" not in content
+
+
+class TestStripPreamble:
+    """Tests for strip_preamble() — removes model preamble before first heading."""
+
+    def test_removes_preamble_before_heading(self):
+        content = "I have all the context I need.\n\n# Section 01\n\nBody text."
+        assert _mod.strip_preamble(content) == "# Section 01\n\nBody text."
+
+    def test_unchanged_when_starts_with_heading(self):
+        content = "# Section 01\n\nBody text."
+        assert _mod.strip_preamble(content) == content
+
+    def test_unchanged_when_no_heading(self):
+        content = "Just prose, no markdown heading at all."
+        assert _mod.strip_preamble(content) == content
+
+    def test_multiline_preamble_removed(self):
+        content = "Line one of preamble.\nLine two.\n\n## Sub heading\n\nBody."
+        assert _mod.strip_preamble(content) == "## Sub heading\n\nBody."
+
+
+class TestPreambleE2E:
+    """End-to-end: a transcript whose final assistant message has a preamble
+    must produce a section file WITHOUT the preamble."""
+
+    @pytest.fixture
+    def hook_script(self):
+        return Path(__file__).parent.parent / "scripts" / "hooks" / "write-section-on-stop.py"
+
+    def test_preamble_stripped_from_written_file(self, hook_script, tmp_path):
+        sections_dir = tmp_path / "sections"
+        sections_dir.mkdir()
+        prompts_dir = sections_dir / ".prompts"
+        prompts_dir.mkdir()
+        prompt_file = prompts_dir / "section-01-foo-prompt.md"
+        prompt_file.write_text("# Prompt")
+
+        transcript_path = tmp_path / "transcript.jsonl"
+        lines = [
+            json.dumps({"message": {"role": "user", "content": f"Read {prompt_file} and execute"}}),
+            json.dumps({"message": {"role": "assistant",
+                                    "content": "I have all the context I need. I'll now write it.\n\n# Section 01: Foo\n\nReal body."}}),
+        ]
+        transcript_path.write_text("\n".join(lines))
+
+        result = subprocess.run(
+            ["uv", "run", str(hook_script)],
+            input=json.dumps({"agent_transcript_path": str(transcript_path)}),
+            capture_output=True, text=True, env=get_test_env(tmp_path),
+        )
+        assert result.returncode == 0
+        out = (sections_dir / "section-01-foo.md").read_text()
+        assert out.startswith("# Section 01: Foo")
+        assert "I have all the context" not in out
+
+    def test_utf8_content_written_correctly(self, hook_script, tmp_path):
+        """Umlaute / em-dash duerfen beim Schreiben nicht zerstoert werden
+        (Windows-Default-Encoding cp1252 wuerde sie kaputtmachen)."""
+        sections_dir = tmp_path / "sections"
+        sections_dir.mkdir()
+        prompts_dir = sections_dir / ".prompts"
+        prompts_dir.mkdir()
+        prompt_file = prompts_dir / "section-02-umlaut-prompt.md"
+        prompt_file.write_text("# Prompt")
+
+        body = "# Section 02 — Konfiguration\n\nÄnderung an Sprüchen: ö ä ü ß."
+        transcript_path = tmp_path / "transcript.jsonl"
+        lines = [
+            json.dumps({"message": {"role": "user", "content": f"Read {prompt_file} and execute"}}),
+            json.dumps({"message": {"role": "assistant", "content": body}}),
+        ]
+        transcript_path.write_text("\n".join(lines), encoding="utf-8")
+
+        result = subprocess.run(
+            ["uv", "run", str(hook_script)],
+            input=json.dumps({"agent_transcript_path": str(transcript_path)}),
+            capture_output=True, text=True, env=get_test_env(tmp_path),
+        )
+        assert result.returncode == 0
+        out = (sections_dir / "section-02-umlaut.md").read_text(encoding="utf-8")
+        assert "—" in out and "Sprüchen" in out and "ß" in out
+        assert "�" not in out  # kein Ersatzzeichen
