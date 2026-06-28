@@ -54,7 +54,7 @@ def read_transcript_entries(transcript_path: str) -> Iterator[dict]:
     if not path.exists():
         raise FileNotFoundError(f"Transcript not found: {transcript_path}")
 
-    for line_num, line in enumerate(path.read_text().strip().split('\n'), 1):
+    for line_num, line in enumerate(path.read_text(encoding='utf-8').strip().split('\n'), 1):
         line = line.strip()
         if not line:
             continue
@@ -170,8 +170,10 @@ def extract_prompt_file_path(user_message: str) -> str:
     Raises:
         ValueError: If pattern not found or file doesn't end in .md
     """
-    # Pattern: "Read /absolute/path/to/file.md and execute"
-    match = re.search(r'Read\s+(/[^\s]+\.md)\s+and execute', user_message)
+    # Pattern: "Read <absolute path>.md and execute" — der Pfad kann Unix (/...)
+    # ODER Windows (C:/...) sein. Darum KEIN fuehrendes '/' erzwingen, sonst
+    # findet der Hook auf Windows den Pfad nie und schreibt keine Section-Datei.
+    match = re.search(r'Read\s+([^\s]+\.md)\s+and execute', user_message)
     if match:
         return match.group(1)
     raise ValueError("Could not find prompt file path in user message")

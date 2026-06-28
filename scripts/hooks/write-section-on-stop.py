@@ -38,7 +38,7 @@ def debug_log(msg: str) -> None:
         return
     try:
         DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with open(DEBUG_LOG, "a") as f:
+        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
             f.write(f"{datetime.now().isoformat()} {msg}\n")
     except OSError:
         pass
@@ -93,6 +93,25 @@ def wait_for_stable_file(path: str, stability_ms: int = 200, timeout_s: float = 
         time.sleep(poll_ms / 1000)
 
     debug_log(f"Timeout waiting for stable file (last_size={last_size})")
+
+
+def strip_preamble(content: str) -> str:
+    """Entferne ein vom Modell evtl. vorangestelltes Vorwort vor der ersten
+    Markdown-Ueberschrift.
+
+    Section-Dateien beginnen per Konvention mit einer Ueberschrift ('# ...').
+    Manche Subagent-Laeufe stellen trotz Prompt einen Einleitungssatz voran
+    (z.B. "I have all the context I need ..."). Wir schneiden alles vor der
+    ersten Zeile weg, die (nach optionalem Whitespace) mit '#' beginnt.
+
+    - Beginnt der Inhalt bereits mit einer Ueberschrift -> unveraendert.
+    - Wird gar keine Ueberschrift gefunden -> unveraendert (kein Datenverlust).
+    """
+    lines = content.splitlines()
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("#"):
+            return content if i == 0 else "\n".join(lines[i:])
+    return content
 
 
 def main() -> int:
@@ -157,6 +176,10 @@ def main() -> int:
         debug_log(f"Failed to get assistant content: {e}")
         return 0
 
+    # Ein evtl. vorangestelltes Modell-Vorwort vor der ersten Ueberschrift entfernen.
+    content = strip_preamble(content)
+    debug_log(f"Content length after strip_preamble: {len(content)} bytes")
+
     # 6. Write to destination
     sections_path = Path(sections_dir)
     if not sections_path.exists():
@@ -165,7 +188,9 @@ def main() -> int:
 
     output_path = sections_path / filename
     try:
-        output_path.write_text(content)
+        # encoding explizit: Windows-Default ist cp1252 und zerstoert Umlaute /
+        # Sonderzeichen (—, ae/oe/ue). Lesen nutzt ebenfalls utf-8 (transcript_parser).
+        output_path.write_text(content, encoding="utf-8")
         debug_log(f"Wrote {len(content)} bytes to {output_path}")
 
         # Verify write
